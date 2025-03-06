@@ -11,14 +11,19 @@
 // Section 0: Environment Validation
 // ----------------------------
 
-const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'PORT'];
-
-requiredEnvVars.forEach(varName => {
-  if (!process.env[varName]) {
-    console.error(`🔥 Critical: Missing ${varName} environment variable`);
-    process.exit(1);
+// Load .env file in development
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
   }
-});
+  
+  // Environment validation
+  const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'PORT'];
+  requiredEnvVars.forEach(varName => {
+    if (!process.env[varName]) {
+      console.error(`🔥 Critical: Missing ${varName} environment variable`);
+      process.exit(1);
+    }
+  });
 
 // ----------------------------
 // Section 1: Package Imports
