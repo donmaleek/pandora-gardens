@@ -1,3 +1,17 @@
+# Environment files
+.env*.local
+.env
+!.env.example  # Keep example file if needed
+
+# Sensitive files
+*.key
+*.pem
+*.cert
+*.crt
+*.pub
+*.priv
+docker-compose.override.yml
+
 # Logs
 logs
 *.log
@@ -7,19 +21,26 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Dependencies
+node_modules/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Build files
+dist/
+dist-ssr/
+*.exe
+*.dll
+*.so
+*.o
+
+# Editor files
+.vscode/
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-.env
+
+# Local development files
+*.local
