@@ -1,0 +1,6 @@
+{
+    "ignore": ["node_modules/", "dist/", "**/*.css"],
+    "events": {
+      "restart": "echo 'Engineer, Vite server restarted!'"
+    }
+  }
