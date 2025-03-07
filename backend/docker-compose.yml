@@ -1,0 +1,91 @@
+# Docker Compose configuration for Pandora Gardens development environment
+# Version: 3.8
+# Usage: docker-compose up --build
+
+version: '3.8'
+
+services:
+  api:
+    build: ./backend
+    container_name: pandora-api
+    ports:
+      - "5000:5000" # Expose API port
+    environment:
+      - NODE_ENV=development # Environment configuration
+      - MONGO_URI=mongodb://mongo:27017/pandora # MongoDB connection string
+      - REDIS_URL=redis://redis:6379 # Redis connection URL
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - pandora-network
+
+  mongo:
+    image: mongo:5.0
+    container_name: pandora-mongo
+    volumes:
+      - mongo-data:/data/db # Persistent data storage
+    ports:
+      - "27017:27017" # Expose MongoDB port for external tools
+    environment:
+      - MONGO_INITDB_DATABASE=pandora
+    networks:
+      - pandora-network
+
+  redis:
+    image: redis:6-alpine
+    container_name: pandora-redis
+    ports:
+      - "6379:6379" # Expose Redis port for external access
+    volumes:
+      - redis-data:/data # Persistent data storage
+    networks:
+      - pandora-network
+
+volumes:
+  mongo-data: # Named volume for MongoDB persistence
+  redis-data: # Named volume for Redis persistence
+
+networks:
+  pandora-network: # Internal network for service communication
+    driver: bridge
+
+# Environment Architecture Documentation:
+#
+# 1. Service Breakdown:
+#    - API: Node.js backend application
+#    - MongoDB: Primary database service
+#    - Redis: Caching and session storage
+#
+# 2. Network Configuration:
+#    - Private bridge network for inter-service communication
+#    - Ports exposed for local development access
+#
+# 3. Volume Management:
+#    - Persistent storage for database files
+#    - Data survives container restarts/recreations
+#
+# Development Workflow:
+# 1. Start services: docker-compose up --build
+# 2. Access API: http://localhost:5000
+# 3. Access MongoDB: mongodb://localhost:27017
+# 4. Access Redis: redis://localhost:6379
+#
+# Best Practices:
+# 1. Use separate networks for different environments
+# 2. Avoid storing sensitive data in compose files
+# 3. Regularly prune unused volumes
+# 4. Use specific image versions for production
+#
+# Security Considerations:
+# - Exposed ports should be protected in production
+# - Use secrets management for credentials
+# - Regular database backups
+# - Network isolation for production environments
+#
+# Production Adjustments:
+# 1. Remove port mappings for database services
+# 2. Add resource limits (memory, cpu)
+# 3. Implement healthchecks
+# 4. Enable TLS for database connections
+# 5. Use proper authentication mechanisms
