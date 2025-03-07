@@ -1,20 +1,9 @@
-/**
- * Email Service Utility
- * ============================================
- * This module handles email sending via Brevo (formerly Sendinblue)
- * using Nodemailer in ALL environments (development and production).
- *
- * It verifies that all required environment variables are set,
- * and throws an error if any are missing.
- *
- * @module utils/email
- * @requires nodemailer
- * @requires dotenv
- */
-
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const AppError = require('./appError');
+// [FIX] Corrected import (remove curly braces)
+const NodemailerExpressHandlebars = require('nodemailer-express-handlebars');
+const path = require('path');
 
 // Validate required environment variables
 const requiredEnvVars = [
@@ -31,54 +20,54 @@ requiredEnvVars.forEach((varName) => {
   }
 });
 
-/**
- * Create and configure the Brevo email transporter.
- * 
- * Required environment variables:
- *  - EMAIL_HOST (Brevo SMTP host)
- *  - EMAIL_PORT (Brevo SMTP port, usually 587)
- *  - EMAIL_USER (Brevo SMTP username)
- *  - EMAIL_PASS (Brevo SMTP password)
- * 
- * @returns {nodemailer.Transporter} Configured email transporter.
- */
+// Configure Nodemailer transporter for Brevo.
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST, 
-  port: Number(process.env.EMAIL_PORT), 
+  host: process.env.EMAIL_HOST,
+  port: Number(process.env.EMAIL_PORT),
   auth: {
-    user: process.env.EMAIL_USER,    
-    pass: process.env.EMAIL_PASS     
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
 
-/**
- * Send an email using the configured Brevo transporter.
- * 
- * @async
- * @function sendEmail
- * @param {Object} options - Email options.
- * @param {string} options.email - Recipient's email address.
- * @param {string} options.subject - Email subject line.
- * @param {string} options.text - Plain text version of the email body.
- * @param {string} [options.html] - Optional HTML version of the email body.
- * @throws {AppError} If the email fails to send.
- * @returns {Promise<void>}
- */
+// Attach Handlebars templating to the transporter.
+const handlebarOptions = {
+  viewEngine: {
+    extname: '.hbs',
+    layoutsDir: path.resolve(__dirname, '../emails/layouts'),
+    partialsDir: path.resolve(__dirname, '../emails/partials'),
+    defaultLayout: false,
+  },
+  viewPath: path.resolve(__dirname, '../emails/templates'),
+  extName: '.hbs',
+};
+
+// [FIX] Remove 'new' keyword
+transporter.use('compile', NodemailerExpressHandlebars(handlebarOptions));
+
+// Send an email via Brevo with optional template support.
 const sendEmail = async (options) => {
   try {
     const mailOptions = {
       from: `Pandora Gardens <${process.env.EMAIL_FROM}>`,
-      to: options.email,
-      subject: options.subject,
-      text: options.text,
-      html: options.html
+      to: options.to,
+      subject: options.subject
     };
 
+    if (options.templateName && options.templateData) {
+      mailOptions.template = options.templateName;
+      mailOptions.context = options.templateData;
+    } else if (options.text) {
+      mailOptions.text = options.text;
+    } else {
+      throw new AppError('Email must include either template or text content.', 400);
+    }
+
     await transporter.sendMail(mailOptions);
-    console.log(`✅ Email sent to ${options.email}`);
+    console.log(`✅ Email sent to ${options.to}`);
   } catch (err) {
     console.error('💥 Email Error:', err);
-    throw new AppError('There was an error sending the email', 500);
+    throw new AppError(`Failed to send email: ${err.message}`, 500);
   }
 };
 
