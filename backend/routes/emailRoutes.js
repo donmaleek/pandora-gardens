@@ -29,7 +29,7 @@ router.post('/welcome', async (req, res) => {
     await sendEmail({
       to,
       subject: `🎉 Welcome to Pandora Gardens, ${name}!`,
-      templateName: 'welcome',
+      templateName: 'welcomeEmail',
       templateData: { name }
     });
 
@@ -48,7 +48,7 @@ router.post('/reset-password', async (req, res) => {
     await sendEmail({
       to,
       subject: '🔑 Reset Your Pandora Gardens Password',
-      templateName: 'resetPassword',
+      templateName: 'resetPasswordEmail',
       templateData: { name, resetLink }
     });
 

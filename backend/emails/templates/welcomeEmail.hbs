@@ -31,7 +31,7 @@
             Welcome to Your Real Estate Command Center, {{firstName}}! 🏡🔑
           </h1>
           <div class="role-badge" style="color: #2A9D8F">
-            {{#if userType === 'tenant'}}Rental Superuser{{else}}Property Maestro{{/if}}
+            {{#if (eq userType "tenant")}}Rental Superuser{{else}}Property Maestro{{/if}}
           </div>
         </mj-text>
       </mj-column>
@@ -54,15 +54,23 @@
           <tr>
             <td style="width: 50px; vertical-align: top">🚀</td>
             <td>
-              <strong>Explore Your {{#if userType === 'tenant'}}Rental Dashboard{{else}}Listing Manager{{/if}}</strong><br>
-              <span style="color: #6c757d">{{#if userType === 'tenant'}}Track payments, request repairs{{else}}Analyze performance metrics{{/if}}</span>
+              <strong>
+                {{#if (eq userType "tenant")}}Explore Your Rental Dashboard{{else}}Explore Your Listing Manager{{/if}}
+              </strong><br>
+              <span style="color: #6c757d">
+                {{#if (eq userType "tenant")}}Track payments, request repairs{{else}}Analyze performance metrics{{/if}}
+              </span>
             </td>
           </tr>
           <tr>
             <td style="width: 50px; vertical-align: top">💎</td>
             <td>
-              <strong>Activate {{#if userType === 'tenant'}}Auto-Pay{{else}}Smart Listing{{/if}}</strong><br>
-              <span style="color: #6c757d">Get 2 months {{#if userType === 'tenant'}}fee-free{{else}}premium features{{/if}}</span>
+              <strong>
+                Activate {{#if (eq userType "tenant")}}Auto-Pay{{else}}Smart Listing{{/if}}
+              </strong><br>
+              <span style="color: #6c757d">
+                Get 2 months {{#if (eq userType "tenant")}}fee-free{{else}}premium features{{/if}}
+              </span>
             </td>
           </tr>
         </mj-table>
@@ -72,12 +80,12 @@
     <!-- ROLE-SPECIFIC CTA -->
     <mj-section padding="20px 0">
       <mj-column>
-        <mj-button href="https://pandoragardens.com/dashboard" 
-                 background-color="#264653"
-                 color="white"
-                 padding="18px 35px"
-                 border-radius="8px">
-          {{#if userType === 'tenant'}}
+        <mj-button href="https://pandoragardens.com/dashboard"
+                   background-color="#264653"
+                   color="white"
+                   padding="18px 35px"
+                   border-radius="8px">
+          {{#if (eq userType "tenant")}}
             📲 Launch Tenant Portal
           {{else}}
             📊 Access Property Analytics
@@ -127,10 +135,10 @@
             Your unique code: <strong style="letter-spacing: 2px">{{referralCode}}</strong>
           </p>
         </mj-text>
-        <mj-button href="https://pandoragardens.com/refer?code={{referralCode}}" 
-                 background-color="#2A9D8F"
-                 color="white"
-                 padding="15px 30px">
+        <mj-button href="https://pandoragardens.com/refer?code={{referralCode}}"
+                   background-color="#2A9D8F"
+                   color="white"
+                   padding="15px 30px">
           💸 Invite Friends → Earn KES 2,000+
         </mj-button>
       </mj-column>

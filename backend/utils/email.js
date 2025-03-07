@@ -1,9 +1,12 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const AppError = require('./appError');
-// [FIX] Corrected import (remove curly braces)
 const NodemailerExpressHandlebars = require('nodemailer-express-handlebars');
 const path = require('path');
+const Handlebars = require('handlebars'); // Added to register helpers
+
+// ✅ Register the 'eq' helper
+Handlebars.registerHelper('eq', (a, b) => a === b);
 
 // Validate required environment variables
 const requiredEnvVars = [
@@ -20,7 +23,7 @@ requiredEnvVars.forEach((varName) => {
   }
 });
 
-// Configure Nodemailer transporter for Brevo.
+// Configure Nodemailer transporter
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: Number(process.env.EMAIL_PORT),
@@ -30,7 +33,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Attach Handlebars templating to the transporter.
+// Attach Handlebars templating to the transporter
 const handlebarOptions = {
   viewEngine: {
     extname: '.hbs',
@@ -42,20 +45,19 @@ const handlebarOptions = {
   extName: '.hbs',
 };
 
-// [FIX] Remove 'new' keyword
 transporter.use('compile', NodemailerExpressHandlebars(handlebarOptions));
 
-// Send an email via Brevo with optional template support.
+// Send email with template or plain text
 const sendEmail = async (options) => {
   try {
     const mailOptions = {
       from: `Pandora Gardens <${process.env.EMAIL_FROM}>`,
       to: options.to,
-      subject: options.subject
+      subject: options.subject,
     };
 
     if (options.templateName && options.templateData) {
-      mailOptions.template = options.templateName;
+      mailOptions.template = options.templateName; // Example: 'welcomeEmail'
       mailOptions.context = options.templateData;
     } else if (options.text) {
       mailOptions.text = options.text;
