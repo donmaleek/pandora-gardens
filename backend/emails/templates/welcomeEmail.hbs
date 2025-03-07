@@ -1,150 +1,75 @@
-<mjml>
-  <mj-head>
-    <mj-title>{{firstName}}, Your Real Estate Evolution Starts Here</mj-title>
-    <mj-preview>Access your dashboard → Pay rent via M-Pesa → Manage properties → Earn rewards</mj-preview>
-    <mj-style>
-      .role-badge {
-        background: #2A9D8F22;
-        border: 2px solid #2A9D8F;
-        border-radius: 20px;
-        padding: 8px 15px;
-        display: inline-block;
-      }
-      .feature-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-      }
-    </mj-style>
-  </mj-head>
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      color: #333;
+      padding: 20px;
+    }
+    .container {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      max-width: 600px;
+      margin: 0 auto;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #007bff;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 20px;
+      margin-top: 20px;
+      background-color: #28a745;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
 
-  <mj-body background-color="#F8FAFC">
+  <div class="container">
+    <h1>Welcome to Pandora Gardens, {{name}}! 🌿</h1>
+    
+    <p>
+      We're thrilled to have you join <strong>Pandora Gardens</strong>—the future of real estate. 
+      Whether you're searching for your dream home, managing your rental, or showcasing your latest property listing, 
+      Pandora Gardens is here to make every step smooth, smart, and secure.
+    </p>
 
-    {{> header }}
+    <p>
+      As part of our community, you'll enjoy:
+    </p>
 
-    <!-- PERSONALIZED HEADER -->
-    <mj-section padding="40px 0" background-color="#ffffff">
-      <mj-column>
-        <mj-text>
-          <h1 style="color: #264653; margin-bottom: 5px">
-            Welcome to Your Real Estate Command Center, {{firstName}}! 🏡🔑
-          </h1>
-          <div class="role-badge" style="color: #2A9D8F">
-            {{#if (eq userType "tenant")}}Rental Superuser{{else}}Property Maestro{{/if}}
-          </div>
-        </mj-text>
-      </mj-column>
-    </mj-section>
+    <ul>
+      <li>🔍 Advanced property searches tailored to your needs.</li>
+      <li>🏠 Virtual tours and rich neighborhood insights.</li>
+      <li>💬 Real-time chat with agents and property owners.</li>
+      <li>📱 Mpesa-powered rent payments with instant notifications.</li>
+      <li>📊 Personal dashboards to manage all your rentals and listings.</li>
+      <li>🎁 Rewards through our referral program and exclusive features.</li>
+    </ul>
 
-    <!-- ONBOARDING ROADMAP -->
-    <mj-section padding="30px 15%">
-      <mj-column>
-        <mj-text>
-          <h2 style="color: #264653">Your First 24-Hour Mission:</h2>
-        </mj-text>
-        <mj-table padding="20px 0">
-          <tr>
-            <td style="width: 50px; vertical-align: top">✅</td>
-            <td>
-              <strong>Verify Identity</strong><br>
-              <span style="color: #6c757d">Secure your account with M-Pesa phone validation</span>
-            </td>
-          </tr>
-          <tr>
-            <td style="width: 50px; vertical-align: top">🚀</td>
-            <td>
-              <strong>
-                {{#if (eq userType "tenant")}}Explore Your Rental Dashboard{{else}}Explore Your Listing Manager{{/if}}
-              </strong><br>
-              <span style="color: #6c757d">
-                {{#if (eq userType "tenant")}}Track payments, request repairs{{else}}Analyze performance metrics{{/if}}
-              </span>
-            </td>
-          </tr>
-          <tr>
-            <td style="width: 50px; vertical-align: top">💎</td>
-            <td>
-              <strong>
-                Activate {{#if (eq userType "tenant")}}Auto-Pay{{else}}Smart Listing{{/if}}
-              </strong><br>
-              <span style="color: #6c757d">
-                Get 2 months {{#if (eq userType "tenant")}}fee-free{{else}}premium features{{/if}}
-              </span>
-            </td>
-          </tr>
-        </mj-table>
-      </mj-column>
-    </mj-section>
+    <p>
+      We’re on a mission to revolutionize how you find, manage, and enjoy property living—bringing everything you need 
+      into one powerful, easy-to-use platform.
+    </p>
 
-    <!-- ROLE-SPECIFIC CTA -->
-    <mj-section padding="20px 0">
-      <mj-column>
-        <mj-button href="https://pandoragardens.com/dashboard"
-                   background-color="#264653"
-                   color="white"
-                   padding="18px 35px"
-                   border-radius="8px">
-          {{#if (eq userType "tenant")}}
-            📲 Launch Tenant Portal
-          {{else}}
-            📊 Access Property Analytics
-          {{/if}}
-        </mj-button>
-      </mj-column>
-    </mj-section>
+    <p>
+      Ready to get started? Explore, connect, and experience real estate like never before.
+    </p>
 
-    <!-- CORE FEATURES GRID -->
-    <mj-section padding="40px 15px" background-color="#ffffff">
-      <mj-column>
-        <mj-text>
-          <h2 style="color: #264653; text-align: center">Your Swiss Army Knife</h2>
-        </mj-text>
-        <mj-table>
-          <tr>
-            <td class="feature-card">
-              <h3 style="margin: 0 0 10px; text-align: center;">💰 Instant Rent Payments</h3>
-              <p style="color: #6c757d; text-align: center;">Secured by Safaricom's Daraja API</p>
-            </td>
-            <td class="feature-card">
-              <h3 style="margin: 0 0 10px; text-align: center;">🏠 Virtual Reality Tours</h3>
-              <p style="color: #6c757d; text-align: center;">Matterport scans + AI neighborhood walkthroughs</p>
-            </td>
-          </tr>
-          <tr>
-            <td class="feature-card">
-              <h3 style="margin: 0 0 10px; text-align: center;">📊 Live Market Pulse</h3>
-              <p style="color: #6c757d; text-align: center;">Occupancy rates, price trends, ROI forecasts</p>
-            </td>
-            <td class="feature-card">
-              <h3 style="margin: 0 0 10px; text-align: center;">🤝 Instant Agent Connect</h3>
-              <p style="color: #6c757d; text-align: center;">Video calls + document sharing</p>
-            </td>
-          </tr>
-        </mj-table>
-      </mj-column>
-    </mj-section>
+    <a href="https://pandoragardens.example.com/login" class="button">Login to Your Account</a>
 
-    <!-- REFERRAL ENGINE -->
-    <mj-section background-color="#E9F5F3" padding="40px 15%">
-      <mj-column>
-        <mj-text align="center">
-          <h3 style="color: #2A9D8F">Share the Revolution</h3>
-          <p style="color: #495057">
-            Earn <strong>5% of friends' first year transactions</strong><br>
-            Your unique code: <strong style="letter-spacing: 2px">{{referralCode}}</strong>
-          </p>
-        </mj-text>
-        <mj-button href="https://pandoragardens.com/refer?code={{referralCode}}"
-                   background-color="#2A9D8F"
-                   color="white"
-                   padding="15px 30px">
-          💸 Invite Friends → Earn KES 2,000+
-        </mj-button>
-      </mj-column>
-    </mj-section>
+    <p style="margin-top: 30px;">
+      Welcome aboard, <br/>
+      The Pandora Gardens Team 🌟
+    </p>
+  </div>
 
-    {{> footer }}
-
-  </mj-body>
-</mjml>
+</body>
+</html>

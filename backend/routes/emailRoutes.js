@@ -26,11 +26,14 @@ router.post('/welcome', async (req, res) => {
   try {
     const { to, name } = req.body;
 
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown IP';
+    const timestamp = new Date().toLocaleString();
+
     await sendEmail({
       to,
       subject: `🎉 Welcome to Pandora Gardens, ${name}!`,
       templateName: 'welcomeEmail',
-      templateData: { name }
+      templateData: { name, ipAddress, timestamp }
     });
 
     res.status(200).json({ message: `✅ Welcome email sent to ${to}` });
@@ -45,11 +48,14 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { to, name, resetLink } = req.body;
 
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown IP';
+    const timestamp = new Date().toLocaleString();
+
     await sendEmail({
       to,
       subject: '🔑 Reset Your Pandora Gardens Password',
       templateName: 'resetPasswordEmail',
-      templateData: { name, resetLink }
+      templateData: { name, resetLink, ipAddress, timestamp }
     });
 
     res.status(200).json({ message: `✅ Password reset email sent to ${to}` });
