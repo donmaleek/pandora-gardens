@@ -13,7 +13,17 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
 }
 
-const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'PORT'];
+const requiredEnvVars = [
+  'MONGO_URI',
+  'JWT_SECRET',
+  'PORT',
+  'EMAIL_HOST',
+  'EMAIL_PORT',
+  'EMAIL_USER',
+  'EMAIL_PASS',
+  'EMAIL_FROM'
+];
+
 requiredEnvVars.forEach(varName => {
   if (!process.env[varName]) {
     console.error(`🔥 Critical: Missing ${varName} environment variable`);
@@ -50,17 +60,22 @@ mongoose.connection.on('disconnected', () => {
   console.log('⚠️  MongoDB Connection State: Disconnected');
 });
 
-app.get('/api/test', (req, res) => {
+// ✅ Test route
+app.get('/api/v1/test', (req, res) => {
   res.json({ message: "Route test successful!" });
 });
 
+// ✅ Auth routes (handles /api/v1/auth/register and /api/v1/auth/login)
 app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/emails', emailRouter); // ✅ Email route registration
+
+// ✅ Email route registration (handles password reset and other emails)
+app.use('/api/v1/emails', emailRouter);
 
 app.get('/', (req, res) => {
   res.send('🏡 Engineer, Welcome to Pandora Gardens Backend API \n');
 });
 
+// ✅ 404 handler
 app.use((req, res, next) => {
   res.status(404).json({
     status: 'error',
@@ -68,6 +83,7 @@ app.use((req, res, next) => {
   });
 });
 
+// ✅ Global error handler
 app.use((err, req, res, next) => {
   console.error('🚨 Error:', err);
   res.status(err.statusCode || 500).json({

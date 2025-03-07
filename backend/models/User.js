@@ -33,6 +33,14 @@ const userSchema = new mongoose.Schema(
         message: '❌ Invalid email format',
       },
     },
+    phone: {
+      type: String,
+      required: [true, '❌ Phone number is required'],
+      validate: {
+        validator: (v) => /^(\+?\d{1,3}[- ]?)?\d{7,15}$/.test(v),
+        message: '❌ Invalid phone number format',
+      },
+    },
     password: {
       type: String,
       required: [true, '❌ Password is required'],
@@ -42,7 +50,7 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ['client', 'landlord', 'agent'],
+        values: ['tenant', 'landlord', 'agent'],
         message: '❌ {VALUE} is not a valid role',
       },
       default: 'client',

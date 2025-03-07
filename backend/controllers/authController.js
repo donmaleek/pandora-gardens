@@ -23,6 +23,7 @@ const createSendToken = (user, statusCode, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
         role: user.role,
       },
     },
@@ -32,23 +33,30 @@ const createSendToken = (user, statusCode, res) => {
 // REGISTER
 exports.register = async (req, res, next) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, phone } = req.body;
 
-    if (!name || !email || !password) {
-      return next(new AppError('Please provide name, email, and password', 400));
+    if (!name || !email || !password || !phone) {
+      return next(
+        new AppError('Please provide name, email, password, and phone number', 400)
+      );
     }
 
     const newUser = await User.create({
       name,
       email,
       password,
+      phone,
       role: role || 'client',
     });
 
+    // Send Welcome Email
     await sendEmail({
-      email: newUser.email,
+      to: newUser.email,
       subject: 'Welcome to Pandora Gardens!',
-      text: `Hi ${newUser.name},\n\nWelcome to our platform!`,
+      templateName: 'welcomeEmail', // matches templateName in sendEmail.js
+      templateData: {
+        name: newUser.name,
+      },
     });
 
     createSendToken(newUser, 201, res);
@@ -92,12 +100,17 @@ exports.forgotPassword = async (req, res, next) => {
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    user.passwordResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.passwordResetToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
     user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     await user.save({ validateBeforeSave: false });
 
-    const resetURL = `${req.protocol}://${req.get('host')}/api/v1/auth/reset-password/${resetToken}`;
+    const resetURL = `${req.protocol}://${req.get(
+      'host'
+    )}/api/v1/auth/reset-password/${resetToken}`;
 
     try {
       await sendEmail({
