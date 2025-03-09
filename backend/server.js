@@ -7,6 +7,7 @@
  * - Environment variable validation
  * - Database connection with retry logic
  * - MPesa API routes with rate limiting
+ * - Email and authentication routes
  * - Middleware for security and error handling
  */
 
@@ -14,23 +15,18 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const https = require('https'); // Secure HTTPS in production
+const https = require('https');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
-const helmet = require('helmet'); // Security headers
-const crypto = require('crypto'); // Cryptography for MPesa signature validation
+const helmet = require('helmet');
+const crypto = require('crypto');
 
-/**
- * Load environment variables from .env file, but only in development mode.
- */
+// Load environment variables
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: './.env' });
 }
 
-/**
- * Validate required environment variables to ensure the server runs properly.
- * The process will exit if any critical variable is missing.
- */
+// Validate required environment variables
 const requiredEnvVars = [
   'MONGO_URI',
   'JWT_SECRET',
@@ -49,9 +45,6 @@ requiredEnvVars.forEach(varName => {
   }
 });
 
-/**
- * If in production, ensure SSL certificate paths are properly set.
- */
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.SSL_KEY_PATH || !process.env.SSL_CERT_PATH || !process.env.SSL_CA_PATH) {
     console.error("❌ Missing SSL certificates! Check your environment variables.");
@@ -61,43 +54,30 @@ if (process.env.NODE_ENV === 'production') {
 
 const app = express();
 
-/**
- * Security Middleware
- * - helmet: Adds security headers
- * - cors: Restricts access to specified origins
- */
+// Security Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL, // Restrict API access to the frontend domain
-  methods: ['POST'], // MPesa only requires POST requests
+  origin: process.env.CLIENT_URL,
+  methods: ['POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-/**
- * Rate Limiting
- * Limits the number of requests to prevent abuse of MPesa endpoints.
- */
+// Rate Limiting
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Max 100 requests per window per IP
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later'
 });
 
-/**
- * Parse JSON request bodies.
- * Also stores the raw body for MPesa signature validation.
- */
+// JSON Middleware
 app.use(express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   },
-  limit: '1mb' // Prevent overly large payloads
+  limit: '1mb'
 }));
 
-/**
- * Database Connection with Retry Logic
- * If the connection fails, it will retry up to 5 times before exiting.
- */
+// Database Connection
 const connectDB = async (retries = 5) => {
   while (retries) {
     try {
@@ -110,22 +90,14 @@ const connectDB = async (retries = 5) => {
     } catch (err) {
       console.error(`❌ Database Connection Failure (${retries} retries left):`, err.message);
       retries--;
-
-      if (retries === 0) {
-        console.error('❌ Database connection failed after multiple attempts. Exiting...');
-        process.exit(1);
-      }
-
+      if (retries === 0) process.exit(1);
       await new Promise(res => setTimeout(res, 5000));
     }
   }
 };
-
 connectDB();
 
-/**
- * Store MPesa configuration in app locals for easier access.
- */
+// Store MPesa config
 app.locals.mpesaConfig = {
   shortCode: process.env.MPESA_SHORT_CODE,
   passkey: process.env.MPESA_PASSKEY,
@@ -133,36 +105,28 @@ app.locals.mpesaConfig = {
   baseUrl: process.env.MPESA_API_BASE
 };
 
-/**
- * Load and use MPesa routes
- */
+// Routes
 const mpesaRoutes = require('./routes/mpesaRoutes');
-app.use('/api/v1/mpesa', apiLimiter, mpesaRoutes);
+const emailRoutes = require('./routes/emailRoutes');
+const authRoutes = require('./routes/authRoutes');
 
-/**
- * Validate MPesa Callback Signature
- * Ensures that the callback received is from Safaricom by verifying the HMAC signature.
- */
+app.use('/api/v1/mpesa', apiLimiter, mpesaRoutes);
+app.use('/api/v1/email', emailRoutes);
+app.use('/api/v1/auth', authRoutes);
+
+// Validate MPesa Callback Signature
 const validateMpesaCallback = (req, res, next) => {
-  const signature = crypto
-    .createHmac('sha256', process.env.MPESA_CONSUMER_SECRET)
+  const signature = crypto.createHmac('sha256', process.env.MPESA_CONSUMER_SECRET)
     .update(req.rawBody)
     .digest('base64');
-
   if (signature !== req.headers['x-mpesa-signature']) {
     console.warn('⚠️ Invalid MPesa Callback Signature from:', req.ip);
-    return res.status(403).json({ 
-      ResultCode: 1,
-      ResultDesc: 'Invalid signature' 
-    });
+    return res.status(403).json({ ResultCode: 1, ResultDesc: 'Invalid signature' });
   }
   next();
 };
 
-/**
- * Global Error Handling Middleware
- * Logs errors and provides friendly error messages to clients.
- */
+// Global Error Handling
 app.use((err, req, res, next) => {
   console.error('🚨 Global Error:', {
     path: req.path,
@@ -172,24 +136,16 @@ app.use((err, req, res, next) => {
   });
 
   if (req.path.includes('mpesa/callback')) {
-    return res.status(200).json({ 
-      ResultCode: 1, 
-      ResultDesc: 'Service unavailable' 
-    });
+    return res.status(200).json({ ResultCode: 1, ResultDesc: 'Service unavailable' });
   }
 
   res.status(err.statusCode || 500).json({
     status: 'error',
-    message: process.env.NODE_ENV === 'production' 
-      ? 'An unexpected error occurred' 
-      : err.message
+    message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message
   });
 });
 
-/**
- * Start the Server
- * Uses HTTPS in production, otherwise falls back to HTTP.
- */
+// Start the Server
 let server;
 if (process.env.NODE_ENV === 'production') {
   const sslOptions = {
@@ -206,10 +162,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-/**
- * Graceful Shutdown
- * Ensures the server and database connection close properly when stopping.
- */
+// Graceful Shutdown
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM received - closing server');
   server.close(() => {

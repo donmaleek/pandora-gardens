@@ -114,9 +114,13 @@ exports.forgotPassword = async (req, res, next) => {
 
     try {
       await sendEmail({
-        email: user.email,
+        to: user.email, // Ensure consistency with sendEmail function
         subject: 'Password Reset (valid for 10 minutes)',
-        text: `Forgot your password? Submit a PATCH request with your new password to: ${resetURL}\n\nIf you didn't request a password reset, please ignore this email.`,
+        templateName: 'resetPasswordEmail', // Matches resetPasswordEmail.hbs
+        templateData: {
+          resetURL, // Include the reset link inside the template
+          name: user.name, // Pass user's name for personalization
+        },
       });
 
       res.status(200).json({
