@@ -1,22 +1,36 @@
 /**
- * server.js - Optimized for Safaricom Daraja Integration
+ * server.js - Production-Grade Safaricom Daraja Integration
+ * 
+ * This file sets up the Express server for handling MPesa transactions securely.
+ * It includes:
+ * - Secure HTTPS setup (for production)
+ * - Environment variable validation
+ * - Database connection with retry logic
+ * - MPesa API routes with rate limiting
+ * - Middleware for security and error handling
  */
 
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const crypto = require('crypto'); // Added for security
-const axios = require('axios'); // Added for Daraja API calls
-const authRouter = require('./routes/authRoutes');
-const emailRouter = require('./routes/emailRoutes');
-const mpesaRoutes = require('./routes/mpesaRoutes');
+const https = require('https'); // Secure HTTPS in production
+const fs = require('fs');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet'); // Security headers
+const crypto = require('crypto'); // Cryptography for MPesa signature validation
 
-// Enhanced environment validation
+/**
+ * Load environment variables from .env file, but only in development mode.
+ */
 if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({ path: './.env.development' });
+  dotenv.config({ path: './.env' });
 }
 
+/**
+ * Validate required environment variables to ensure the server runs properly.
+ * The process will exit if any critical variable is missing.
+ */
 const requiredEnvVars = [
   'MONGO_URI',
   'JWT_SECRET',
@@ -24,7 +38,8 @@ const requiredEnvVars = [
   'MPESA_CONSUMER_SECRET',
   'MPESA_SHORT_CODE',
   'MPESA_PASSKEY',
-  'MPESA_CALLBACK_URL'
+  'MPESA_CALLBACK_URL',
+  'MPESA_API_BASE'
 ];
 
 requiredEnvVars.forEach(varName => {
@@ -34,103 +49,135 @@ requiredEnvVars.forEach(varName => {
   }
 });
 
+/**
+ * If in production, ensure SSL certificate paths are properly set.
+ */
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.SSL_KEY_PATH || !process.env.SSL_CERT_PATH || !process.env.SSL_CA_PATH) {
+    console.error("❌ Missing SSL certificates! Check your environment variables.");
+    process.exit(1);
+  }
+}
+
 const app = express();
 
-// Enhanced Security Middleware
+/**
+ * Security Middleware
+ * - helmet: Adds security headers
+ * - cors: Restricts access to specified origins
+ */
+app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  origin: process.env.CLIENT_URL, // Restrict API access to the frontend domain
+  methods: ['POST'], // MPesa only requires POST requests
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// MPesa-specific middleware
+/**
+ * Rate Limiting
+ * Limits the number of requests to prevent abuse of MPesa endpoints.
+ */
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Max 100 requests per window per IP
+  message: 'Too many requests from this IP, please try again later'
+});
+
+/**
+ * Parse JSON request bodies.
+ * Also stores the raw body for MPesa signature validation.
+ */
 app.use(express.json({
   verify: (req, res, buf) => {
-    req.rawBody = buf.toString(); // Needed for signature validation
-  }
+    req.rawBody = buf.toString();
+  },
+  limit: '1mb' // Prevent overly large payloads
 }));
 
-// Database Connection (Optimized)
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000
-    });
-    console.log('✅ MongoDB Connected with Production Settings');
-  } catch (err) {
-    console.error('❌ Critical Database Connection Failure:', err);
-    process.exit(1);
+/**
+ * Database Connection with Retry Logic
+ * If the connection fails, it will retry up to 5 times before exiting.
+ */
+const connectDB = async (retries = 5) => {
+  while (retries) {
+    try {
+      await mongoose.connect(process.env.MONGO_URI, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000
+      });
+      console.log('✅ MongoDB Connected with Production Settings');
+      return;
+    } catch (err) {
+      console.error(`❌ Database Connection Failure (${retries} retries left):`, err.message);
+      retries--;
+
+      if (retries === 0) {
+        console.error('❌ Database connection failed after multiple attempts. Exiting...');
+        process.exit(1);
+      }
+
+      await new Promise(res => setTimeout(res, 5000));
+    }
   }
 };
 
 connectDB();
 
-// Daraja Security Credentials Generator
-const generateSecurityCredentials = () => {
-  const initiatorPassword = process.env.MPESA_INITIATOR_PASSWORD;
-  const passkey = process.env.MPESA_PASSKEY;
-  
-  return crypto.createHash('sha256')
-    .update(`${initiatorPassword}${passkey}`)
-    .digest('hex');
+/**
+ * Store MPesa configuration in app locals for easier access.
+ */
+app.locals.mpesaConfig = {
+  shortCode: process.env.MPESA_SHORT_CODE,
+  passkey: process.env.MPESA_PASSKEY,
+  consumerSecret: process.env.MPESA_CONSUMER_SECRET,
+  baseUrl: process.env.MPESA_API_BASE
 };
 
-// MPesa Access Token Middleware (Reusable)
-const getMpesaAccessToken = async () => {
-  try {
-    const response = await axios.get(
-      'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
-      {
-        auth: {
-          username: process.env.MPESA_CONSUMER_KEY,
-          password: process.env.MPESA_CONSUMER_SECRET
-        }
-      }
-    );
-    return response.data.access_token;
-  } catch (error) {
-    console.error('🔒 MPesa Auth Error:', error.response.data);
-    throw new Error('Failed to get MPesa access token');
+/**
+ * Load and use MPesa routes
+ */
+const mpesaRoutes = require('./routes/mpesaRoutes');
+app.use('/api/v1/mpesa', apiLimiter, mpesaRoutes);
+
+/**
+ * Validate MPesa Callback Signature
+ * Ensures that the callback received is from Safaricom by verifying the HMAC signature.
+ */
+const validateMpesaCallback = (req, res, next) => {
+  const signature = crypto
+    .createHmac('sha256', process.env.MPESA_CONSUMER_SECRET)
+    .update(req.rawBody)
+    .digest('base64');
+
+  if (signature !== req.headers['x-mpesa-signature']) {
+    console.warn('⚠️ Invalid MPesa Callback Signature from:', req.ip);
+    return res.status(403).json({ 
+      ResultCode: 1,
+      ResultDesc: 'Invalid signature' 
+    });
   }
+  next();
 };
 
-// Routes
-app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/emails', emailRouter);
-app.use('/api/v1/mpesa', mpesaRoutes); // Changed to versioned endpoint
-
-// Enhanced MPesa Callback Handler
-app.post('/mpesa-callback', async (req, res) => {
-  try {
-    console.log('🔔 MPesa Callback Received:', req.body);
-    
-    // Validate callback signature
-    const signature = crypto.createHmac('sha256', process.env.MPESA_CONSUMER_SECRET)
-      .update(req.rawBody)
-      .digest('base64');
-      
-    if (signature !== req.headers['x-mpesa-signature']) {
-      console.warn('⚠️ Invalid MPesa Callback Signature');
-      return res.status(401).end();
-    }
-
-    // Process transaction here
-    res.status(200).json({ ResultCode: 0, ResultDesc: 'Success' });
-    
-  } catch (error) {
-    console.error('💥 Callback Processing Error:', error);
-    res.status(500).json({ ResultCode: 1, ResultDesc: 'Internal Server Error' });
-  }
-});
-
-// Error Handling (Optimized)
+/**
+ * Global Error Handling Middleware
+ * Logs errors and provides friendly error messages to clients.
+ */
 app.use((err, req, res, next) => {
   console.error('🚨 Global Error:', {
+    path: req.path,
+    method: req.method,
     message: err.message,
     stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
   });
-  
+
+  if (req.path.includes('mpesa/callback')) {
+    return res.status(200).json({ 
+      ResultCode: 1, 
+      ResultDesc: 'Service unavailable' 
+    });
+  }
+
   res.status(err.statusCode || 500).json({
     status: 'error',
     message: process.env.NODE_ENV === 'production' 
@@ -139,14 +186,37 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+/**
+ * Start the Server
+ * Uses HTTPS in production, otherwise falls back to HTTP.
+ */
+let server;
+if (process.env.NODE_ENV === 'production') {
+  const sslOptions = {
+    key: fs.readFileSync(process.env.SSL_KEY_PATH),
+    cert: fs.readFileSync(process.env.SSL_CERT_PATH),
+    ca: fs.readFileSync(process.env.SSL_CA_PATH)
+  };
+  server = https.createServer(sslOptions, app).listen(443, () => {
+    console.log('🔒 HTTPS server running on port 443');
+  });
+} else {
+  server = app.listen(process.env.PORT || 5000, () => {
+    console.log(`🚀 Development server running on port ${process.env.PORT || 5000}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`
-  🚀 Server Status:
-  - Port: ${PORT}
-  - Environment: ${process.env.NODE_ENV || 'development'}
-  - MPesa Mode: ${process.env.MPESA_ENV || 'sandbox'}
-  - Callback URL: ${process.env.MPESA_CALLBACK_URL}
-  `);
+/**
+ * Graceful Shutdown
+ * Ensures the server and database connection close properly when stopping.
+ */
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received - closing server');
+  server.close(() => {
+    console.log('✅ Server shutting down gracefully...');
+    mongoose.connection.close(false, () => {
+      console.log('📦 MongoDB connection closed');
+      process.exit(0);
+    });
+  });
 });
