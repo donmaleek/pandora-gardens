@@ -49,15 +49,19 @@ exports.register = async (req, res, next) => {
       role: role || 'client',
     });
 
-    // Send Welcome Email
-    await sendEmail({
-      to: newUser.email,
-      subject: 'Welcome to Pandora Gardens!',
-      templateName: 'welcomeEmail', // matches templateName in sendEmail.js
-      templateData: {
-        name: newUser.name,
-      },
-    });
+    // Attempt to send Welcome Email
+    try {
+      await sendEmail({
+        to: newUser.email,
+        subject: 'Welcome to Pandora Gardens!',
+        templateName: 'welcomeEmail', // matches templateName in sendEmail.js
+        templateData: {
+          name: newUser.name,
+        },
+      });
+    } catch (error) {
+      console.error(`⚠️ Email sending failed for ${newUser.email}:`, error.message);
+    }
 
     createSendToken(newUser, 201, res);
   } catch (err) {

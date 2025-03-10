@@ -56,9 +56,12 @@ const app = express();
 
 // Security Middleware
 app.use(helmet());
+
+// Updated CORS Configuration
 app.use(cors({
-  origin: process.env.CLIENT_URL,
-  methods: ['POST'],
+  origin: ['http://localhost:5173'], // Allow frontend
+  credentials: true, // Allow cookies and authorization headers
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -173,3 +176,28 @@ process.on('SIGTERM', () => {
     });
   });
 });
+
+// Updated handleSubmit function
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!validateForm()) return;
+
+  try {
+    const response = await fetch('http://localhost:5000/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    });
+
+    const data = await response.json();
+    console.log("Server response:", data); // Log server response
+
+    if (!response.ok) throw new Error(data.message || 'Registration failed');
+
+    setStatusMessage({ text: 'Registration successful! Redirecting...', type: 'success' });
+    setTimeout(() => navigate('/login'), 2000);
+  } catch (error) {
+    console.error("Error:", error.message);
+    setStatusMessage({ text: error.message, type: 'error' });
+  }
+};
