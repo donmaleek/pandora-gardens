@@ -3,7 +3,7 @@ import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Jobs from "./pages/Jobs";
 import About from "./pages/About";
-import Register from "./pages/Register";
+import RegistrationPage from "./pages/RegistrationPage";
 import Login from "./pages/Login";
 
 function App() {
@@ -14,7 +14,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/jobs" element={<Jobs />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/registration" element={<RegistrationPage />} />
         <Route path="/login" element={<Login />} />
       </Routes>
     </>
