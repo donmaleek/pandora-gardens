@@ -5,8 +5,8 @@ import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import house1 from '../assets/Pandora_swahili_st.jpeg';
-import house2 from '../assets/pandora-bg.jpeg';
-import house3 from '../assets/pandora-bg.jpeg';
+import house2 from '../assets/pandora-3.png';
+import house3 from '../assets/pandora-4.png';
 
 const LoginPage = () => {
   const navigate = useNavigate();

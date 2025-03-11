@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import house1 from '../assets/Pandora_swahili_st.jpeg';
-import house2 from '../assets/pandora-bg.jpeg';
-import house3 from '../assets/pandora-bg.jpeg';
+import house1 from '../assets/pandora-21.jpeg';
+import house2 from '../assets/pandora-22.jpeg';
+import house3 from '../assets/pandora-23.jpeg';
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Slider from "react-slick";

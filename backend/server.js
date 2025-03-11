@@ -20,6 +20,7 @@ const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const crypto = require('crypto');
+const adminRoutes = require('./routes/adminRoutes');
 
 // Load environment variables
 if (process.env.NODE_ENV !== 'production') {
@@ -116,6 +117,7 @@ const authRoutes = require('./routes/authRoutes');
 app.use('/api/v1/mpesa', apiLimiter, mpesaRoutes);
 app.use('/api/v1/email', emailRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // Validate MPesa Callback Signature
 const validateMpesaCallback = (req, res, next) => {

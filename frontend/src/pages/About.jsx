@@ -106,7 +106,7 @@ const About = () => {
                 className="py-16 px-8 text-center text-white relative bg-cover bg-center"
                 style={{ backgroundImage: "url('./src/assets/pandora-bg.jpeg')" }}
             >
-                <div className="absolute inset-0 bg-blue-900 bg-opacity-30"></div>
+                <div className="absolute inset-0 bg-blue-900 bg-opacity-70"></div>
                 <div className="relative z-10">
                     <h2 className="text-3xl font-bold">Start Your Real Estate Journey Today!</h2>
                     <p className="mt-4 text-lg max-w-2xl mx-auto">
