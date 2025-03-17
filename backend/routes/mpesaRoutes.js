@@ -1,15 +1,6 @@
 /**
  * MPesa Daraja API Integration Module
- *
- * Features Implemented:
- * 1. Secure Token Management (Cached Access Token)
- * 2. Rate Limiting (Prevents Abuse)
- * 3. Request Validation (Ensures Data Integrity)
- * 4. Payment Duplication Prevention
- * 5. Secure Callback Handling with HMAC Validation
- * 6. Detailed Error Logging (Using Winston)
- * 7. Payment History with Pagination
- * 8. Health Check Endpoint
+ * (Corrected version with proper model import)
  */
 
 const express = require("express");
@@ -19,6 +10,7 @@ const mongoose = require("mongoose");
 const rateLimit = require("express-rate-limit");
 const { body, validationResult } = require("express-validator");
 const router = express.Router();
+const Payment = require('../models/Payment'); // Added correct import
 
 // 1. Configuration Management =================================================
 const config = {
@@ -28,21 +20,22 @@ const config = {
     consumerSecret: process.env.MPESA_CONSUMER_SECRET,
     baseUrl: process.env.MPESA_API_BASE,
     callbackUrl: process.env.MPESA_CALLBACK_URL,
-    tokenTTL: 3500, // 58 minutes in seconds
+    tokenTTL: 3500,
   },
   validation: {
-    phoneRegex: /^254(7\d{8}|1\d{8})$/, // Matches 2547xxxxxxxx or 2541xxxxxxxx
+    phoneRegex: /^254(7\d{8}|1\d{8})$/,
   },
 };
 
 // 2. Rate Limiting Middleware =================================================
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Limit each IP to 50 requests per window
+  windowMs: 15 * 60 * 1000,
+  max: 50,
   handler: (req, res) => {
-    res
-      .status(429)
-      .json({ status: "error", message: "Too many requests, try again later" });
+    res.status(429).json({ 
+      status: "error", 
+      message: "Too many requests, try again later" 
+    });
   },
 });
 
@@ -60,25 +53,10 @@ const validateSTKRequest = [
 ];
 
 // 4. Asynchronous Error Handling Wrapper ======================================
-const asyncHandler =
-  (fn) =>
-  (req, res, next) =>
-    Promise.resolve(fn(req, res, next)).catch(next);
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
 
-// 5. Payment Model ============================================================
-const PaymentSchema = new mongoose.Schema(
-  {
-    phone: String,
-    amount: Number,
-    checkoutRequestId: { type: String, unique: true },
-    status: { type: String, default: "Pending" },
-  },
-  { timestamps: true }
-);
-
-const Payment = mongoose.model("Payment", PaymentSchema);
-
-// 6. Secure Token Management ==================================================
+// 5. Secure Token Management ==================================================
 let tokenCache = null;
 
 const getAccessToken = async () => {
@@ -108,21 +86,21 @@ const getAccessToken = async () => {
   }
 };
 
-// 7. STK Push Payment Request =========================================
+// 6. STK Push Payment Request ================================================
 const stkPush = async (req, res) => {
   try {
     const { phone, amount } = req.body;
 
     if (!/^2547\d{8}$/.test(phone)) {
-      return res
-        .status(400)
-        .json({ error: "Invalid phone number format. Use 2547XXXXXXXX" });
+      return res.status(400).json({ 
+        error: "Invalid phone number format. Use 2547XXXXXXXX" 
+      });
     }
 
     if (!amount || isNaN(amount) || amount <= 0) {
-      return res
-        .status(400)
-        .json({ error: "Amount must be a valid positive number" });
+      return res.status(400).json({ 
+        error: "Amount must be a valid positive number" 
+      });
     }
 
     const accessToken = await getAccessToken();
@@ -166,10 +144,9 @@ const stkPush = async (req, res) => {
   }
 };
 
-// 8. Initiate STK Push via API Route ==========================================
+// 7. API Routes ==============================================================
 router.post("/stk-push", apiLimiter, validateSTKRequest, asyncHandler(stkPush));
 
-// 9. Handle STK Callback Securely =============================================
 router.post("/callback", asyncHandler(async (req, res) => {
   const { Body: { stkCallback: callback } } = req.body;
 
@@ -185,20 +162,37 @@ router.post("/callback", asyncHandler(async (req, res) => {
   res.json({ ResultCode: 0, ResultDesc: "Success" });
 }));
 
-// 10. Fetch Payment History with Pagination ===================================
+// Replace the existing /history endpoint with this:
 router.get("/history/:phone", asyncHandler(async (req, res) => {
   const { phone } = req.params;
   const { page = 1, limit = 10 } = req.query;
+  
+  const options = {
+    page: parseInt(page),
+    limit: parseInt(limit),
+    sort: { createdAt: -1 },
+    collation: { locale: 'en' }
+  };
 
-  const payments = await Payment.find({ phone })
-    .sort("-createdAt")
-    .limit(limit * 1)
-    .skip((page - 1) * limit);
+  const [results, total] = await Promise.all([
+    Payment.find({ phone })
+      .sort(options.sort)
+      .limit(options.limit)
+      .skip((options.page - 1) * options.limit)
+      .exec(),
+    Payment.countDocuments({ phone })
+  ]);
 
-  res.json({ status: "success", data: payments });
+  res.json({
+    status: "success",
+    data: results,
+    total,
+    page: options.page,
+    limit: options.limit,
+    totalPages: Math.ceil(total / options.limit)
+  });
 }));
 
-// 11. Health Check Endpoint ===================================================
 router.get("/health", asyncHandler(async (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
   res.json({

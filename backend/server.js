@@ -1,156 +1,207 @@
-/**
- * server.js - Production-Grade Safaricom Daraja Integration
- * 
- * This file sets up the Express server for handling MPesa transactions securely.
- * It includes:
- * - Secure HTTPS setup (for production)
- * - Environment variable validation
- * - Database connection with retry logic
- * - MPesa API routes with rate limiting
- * - Email and authentication routes
- * - Middleware for security and error handling
- */
+require('dotenv').config();
 
+// ====== Keep all imports first ======
 const express = require('express');
-const dotenv = require('dotenv');
 const cors = require('cors');
-const mongoose = require('mongoose');
-const https = require('https');
-const fs = require('fs');
-const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
-const crypto = require('crypto');
-const adminRoutes = require('./routes/adminRoutes');
+const compression = require('compression');
+const mongoose = require('mongoose');
+const rateLimit = require('express-rate-limit');
+const winston = require('winston');
+const morgan = require('morgan');
+const fs = require('fs');
+const https = require('https');
+const jwt = require('jsonwebtoken');
+// ====== End of imports ======
 
-// Load environment variables
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({ path: './.env' });
-}
-
-// Validate required environment variables
-const requiredEnvVars = [
-  'MONGO_URI',
-  'JWT_SECRET',
-  'MPESA_CONSUMER_KEY',
-  'MPESA_CONSUMER_SECRET',
-  'MPESA_SHORT_CODE',
-  'MPESA_PASSKEY',
-  'MPESA_CALLBACK_URL',
-  'MPESA_API_BASE'
-];
-
-requiredEnvVars.forEach(varName => {
-  if (!process.env[varName]) {
-    console.error(`🔥 Critical: Missing ${varName} environment variable`);
-    process.exit(1);
-  }
+// ====== Initialize logger after importing winston ======
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'server.log' })
+  ]
 });
 
-if (process.env.NODE_ENV === 'production') {
-  if (!process.env.SSL_KEY_PATH || !process.env.SSL_CERT_PATH || !process.env.SSL_CA_PATH) {
-    console.error("❌ Missing SSL certificates! Check your environment variables.");
-    process.exit(1);
-  }
+// ====== Environment Validation ======
+if (!process.env.MONGODB_URI) {
+  logger.error('❌ FATAL ERROR: MONGODB_URI is not defined');
+  // ====== ADDED HELPFUL MESSAGE ======
+  logger.error('💡 Did you mean to use MONGO_URI? Rename it to MONGODB_URI in .env');
+  logger.info('Current environment variables:', Object.keys(process.env));
+  process.exit(1);
 }
+
+if (!process.env.JWT_SECRET) {
+  logger.error('❌ FATAL ERROR: JWT_SECRET is not defined');
+  process.exit(1);
+}
+// ====== End of validation ======
+
+const User = require('./models/User');
+const { sendEmail, sendSMS } = require('./utils/notifications');
+const { authenticateMiddleware } = require('./middleware/authMiddleware');
+require('./utils/reminderService');
+
+const mpesaRoutes = require('./routes/mpesaRoutes');
+const emailRoutes = require('./routes/emailRoutes');
+const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
-// Security Middleware
-app.use(helmet());
-
-// Updated CORS Configuration
+// Logger setup using Winston (keep original configuration)
 app.use(cors({
-  origin: ['http://localhost:5173'], // Allow frontend
-  credentials: true, // Allow cookies and authorization headers
+  origin: [
+    'http://localhost:5173',
+    'https://your-production-domain.com'
+  ],
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+app.use(helmet());
+app.use(compression());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(morgan('combined'));
 
-// Rate Limiting
-const apiLimiter = rateLimit({
+// Rate limiting (original configuration)
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many requests from this IP, please try again later'
+  max: 5,
+  message: 'Too many login attempts. Please try again later.'
+});
+app.use('/api/v1/auth', authLimiter);
+
+const mpesaLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: 'Too many MPesa requests. Slow down!'
+});
+app.use('/api/v1/mpesa', mpesaLimiter);
+
+// Database connection with improved diagnostics
+mongoose.set('strictQuery', false);
+
+// Enhanced connection logging
+logger.info(`🔍 Attempting connection to: ${process.env.MONGODB_URI.replace(/(mongodb(\+srv)?:\/\/[^:]+:)([^@]+)/, '$1*****')}`);
+
+// Connection event listeners
+mongoose.connection.on('connected', () => {
+  logger.info('📊 MongoDB Connection Established');
 });
 
-// JSON Middleware
-app.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  },
-  limit: '1mb'
-}));
+mongoose.connection.on('error', (err) => {
+  logger.error(`‼️ MongoDB Connection Error: ${err.message}`);
+});
 
-// Database Connection
+mongoose.connection.on('disconnected', () => {
+  logger.warn('📴 MongoDB Connection Lost');
+});
+
+// Connection function with retries
 const connectDB = async (retries = 5) => {
+  const connectionOptions = {
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+    retryWrites: true,
+    w: 'majority'
+  };
+
   while (retries) {
     try {
-      await mongoose.connect(process.env.MONGO_URI, {
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000
-      });
-      console.log('✅ MongoDB Connected with Production Settings');
+      await mongoose.connect(process.env.MONGODB_URI, connectionOptions);
+      logger.info('✅ MongoDB Connected');
+      
+      // Database health check
+      setTimeout(async () => {
+        try {
+          await mongoose.connection.db.admin().ping();
+          logger.info('🏓 Database Ping Successful');
+        } catch (pingErr) {
+          logger.error('‼️ Database Ping Failed:', pingErr.message);
+        }
+      }, 5000);
+      
       return;
     } catch (err) {
-      console.error(`❌ Database Connection Failure (${retries} retries left):`, err.message);
+      logger.error(`❌ Connection Attempt Failed (${retries} left): ${err.message}`);
       retries--;
       if (retries === 0) process.exit(1);
       await new Promise(res => setTimeout(res, 5000));
     }
   }
 };
+
 connectDB();
 
-// Store MPesa config
-app.locals.mpesaConfig = {
-  shortCode: process.env.MPESA_SHORT_CODE,
-  passkey: process.env.MPESA_PASSKEY,
-  consumerSecret: process.env.MPESA_CONSUMER_SECRET,
-  baseUrl: process.env.MPESA_API_BASE
-};
+// Authentication & User Routes
+app.post('/api/user/send-verification', authenticateMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const verificationLink = `http://localhost:5000/verify-email?token=${token}`;
+
+    await sendEmail(user.email, 'Verify Your Email', `Click the link to verify: ${verificationLink}`);
+    res.json({ message: 'Verification email sent' });
+  } catch (error) {
+    logger.error('❌ Error sending verification email:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.post('/api/user/send-2fa', authenticateMiddleware, async (req, res) => {
+  try {
+    const code = Math.floor(100000 + Math.random() * 900000);
+    req.user.otp = code;
+    await req.user.save();
+    await sendSMS(req.user.phone, `Your 2FA code: ${code}`);
+    res.json({ message: '2FA code sent' });
+  } catch (error) {
+    logger.error('❌ Error sending 2FA code:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Profile Page Route
+app.get('/api/user/profile', authenticateMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
+  } catch (error) {
+    logger.error('❌ Error fetching user profile:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 // Routes
-const mpesaRoutes = require('./routes/mpesaRoutes');
-const emailRoutes = require('./routes/emailRoutes');
-const authRoutes = require('./routes/authRoutes');
-
-app.use('/api/v1/mpesa', apiLimiter, mpesaRoutes);
+app.use('/api/v1/mpesa', mpesaRoutes);
 app.use('/api/v1/email', emailRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
-// Validate MPesa Callback Signature
-const validateMpesaCallback = (req, res, next) => {
-  const signature = crypto.createHmac('sha256', process.env.MPESA_CONSUMER_SECRET)
-    .update(req.rawBody)
-    .digest('base64');
-  if (signature !== req.headers['x-mpesa-signature']) {
-    console.warn('⚠️ Invalid MPesa Callback Signature from:', req.ip);
-    return res.status(403).json({ ResultCode: 1, ResultDesc: 'Invalid signature' });
-  }
-  next();
-};
-
-// Global Error Handling
-app.use((err, req, res, next) => {
-  console.error('🚨 Global Error:', {
-    path: req.path,
-    method: req.method,
-    message: err.message,
-    stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
-  });
-
-  if (req.path.includes('mpesa/callback')) {
-    return res.status(200).json({ ResultCode: 1, ResultDesc: 'Service unavailable' });
-  }
-
-  res.status(err.statusCode || 500).json({
-    status: 'error',
-    message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message
-  });
+app.get('/', (req, res) => {
+  res.send('Welcome to the API');
 });
 
-// Start the Server
+// Global Error Handling Middleware
+app.use((err, req, res, next) => {
+  logger.error(`❌ ${err.message} - ${req.method} ${req.originalUrl}`);
+  const statusCode = err.status || 500;
+  res.status(statusCode).json({ message: err.message || 'Internal Server Error' });
+});
+
+// Handle Undefined Routes
+app.use('*', (req, res) => {
+  res.status(404).json({ message: 'Route Not Found' });
+});
+
+// Server Initialization
 let server;
 if (process.env.NODE_ENV === 'production') {
   const sslOptions = {
@@ -159,47 +210,21 @@ if (process.env.NODE_ENV === 'production') {
     ca: fs.readFileSync(process.env.SSL_CA_PATH)
   };
   server = https.createServer(sslOptions, app).listen(443, () => {
-    console.log('🔒 HTTPS server running on port 443');
+    logger.info('🔒 HTTPS server running on port 443');
   });
 } else {
   server = app.listen(process.env.PORT || 5000, () => {
-    console.log(`🚀 Development server running on port ${process.env.PORT || 5000}`);
+    logger.info(`🚀 Development server running on port ${process.env.PORT || 5000}`);
   });
 }
 
 // Graceful Shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received - closing server');
-  server.close(() => {
-    console.log('✅ Server shutting down gracefully...');
-    mongoose.connection.close(false, () => {
-      console.log('📦 MongoDB connection closed');
-      process.exit(0);
-    });
+process.on('SIGTERM', async () => {
+  logger.info('🛑 SIGTERM received - closing server');
+  server.close(async () => {
+    logger.info('✅ Server shutting down gracefully...');
+    if (mongoose.connection.readyState) await mongoose.connection.close();
+    logger.info('📦 MongoDB connection closed');
+    process.exit(0);
   });
 });
-
-// Updated handleSubmit function
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!validateForm()) return;
-
-  try {
-    const response = await fetch('http://localhost:5000/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
-
-    const data = await response.json();
-    console.log("Server response:", data); // Log server response
-
-    if (!response.ok) throw new Error(data.message || 'Registration failed');
-
-    setStatusMessage({ text: 'Registration successful! Redirecting...', type: 'success' });
-    setTimeout(() => navigate('/login'), 2000);
-  } catch (error) {
-    console.error("Error:", error.message);
-    setStatusMessage({ text: error.message, type: 'error' });
-  }
-};
