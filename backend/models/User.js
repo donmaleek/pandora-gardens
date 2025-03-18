@@ -37,7 +37,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, '❌ Phone number is required'],
       validate: {
-        validator: (v) => /^(\+?\d{1,3}[- ]?)?\d{7,15}$/.test(v),
+        validator: (v) => /^(\+?\d{1,4}[-.\s]?)?(\d{7,15})$/.test(v),
         message: '❌ Invalid phone number format',
       },
     },
@@ -49,11 +49,8 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: {
-        values: ['tenant', 'landlord', 'agent'],
-        message: '❌ {VALUE} is not a valid role',
-      },
-      default: 'client',
+      required: [true, '❌ Role is required'],
+      enum: ['tenant', 'landlord', 'agent', 'admin'],
     },
   },
   {
@@ -79,7 +76,8 @@ userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
   try {
-    const salt = await bcrypt.genSalt(Number(process.env.BCRYPT_SALT_ROUNDS) || 10);
+    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
+    const salt = await bcrypt.genSalt(saltRounds);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {

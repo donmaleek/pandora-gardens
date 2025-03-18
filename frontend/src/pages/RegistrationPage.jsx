@@ -73,10 +73,10 @@ const RegistrationPage = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="flex flex-wrap w-full max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden mx-4">
+      <div className="flex flex-wrap w-full max-w-6xl bg-gray-50 rounded-2xl shadow-2xl overflow-hidden mx-4">
         
         {/* Image Carousel */}
-        <div className="hidden md:block w-1/2 relative bg-black">
+        <div className="hidden md:block w-1/2 relative mt-[55px] p-[10px] rounded-[20px]">
           <Slider {...settings} className="h-full">
             {[house1, house2, house3].map((img, index) => (
               <div 
@@ -86,7 +86,7 @@ const RegistrationPage = () => {
                 <img 
                   src={img} 
                   alt={`House ${index + 1}`} 
-                  className="w-full h-full object-cover opacity-90"
+                  className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
               </div>
@@ -115,6 +115,7 @@ const RegistrationPage = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Name, Email, Phone */}
               {[
                 { label: 'Full Name', type: 'text', name: 'name' }, 
                 { label: 'Email', type: 'email', name: 'email' }, 
@@ -135,6 +136,26 @@ const RegistrationPage = () => {
                 </div>
               ))}
 
+              {/* Role Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Role
+                </label>
+                <select
+                  name="role"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                >
+                  <option value="">-- Select Role --</option>
+                  <option value="tenant">Tenant</option>
+                  <option value="landlord">Landlord</option>
+                  <option value="agent">Agent</option>
+                </select>
+                {errors.role && <p className="text-red-600 text-xs mt-1.5">{errors.role}</p>}
+              </div>
+
+              {/* Password */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Password
@@ -155,44 +176,12 @@ const RegistrationPage = () => {
                     {showPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
                 </div>
-                {errors.password && <p className="text-red-600 text-xs mt-1.5">{errors.password}</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Role
-                </label>
-                <select
-                  name="role"
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                >
-                  <option value="">Select your role</option>
-                  <option value="tenant">Tenant</option>
-                  <option value="landlord">Landlord</option>
-                  <option value="agent">Agent</option>
-                </select>
-                {errors.role && <p className="text-red-600 text-xs mt-1.5">{errors.role}</p>}
-              </div>
-
-              <button 
-                type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors shadow-sm"
-              >
+              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg">
                 Create Account
               </button>
             </form>
-
-            <p className="mt-8 text-center text-sm text-gray-600">
-              Already have an account?{' '}
-              <button 
-                onClick={() => navigate('/login')}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Sign in here
-              </button>
-            </p>
           </div>
         </div>
       </div>

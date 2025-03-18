@@ -76,20 +76,49 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return next(new AppError('Please provide email and password', 400));
-    }
-
+    
+    // 1. Check if user exists
     const user = await User.findOne({ email }).select('+password');
-
-    if (!user || !(await user.matchPassword(password))) {
-      return next(new AppError('Incorrect email or password', 401));
+    if (!user) {
+      return res.status(401).json({ 
+        status: 'fail',
+        error: 'Incorrect email or password'
+      });
     }
 
-    createSendToken(user, 200, res);
-  } catch (err) {
-    next(err);
+    // 2. Validate password
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({
+        status: 'fail', 
+        error: 'Incorrect email or password'
+      });
+    }
+
+    // 3. Generate JWT
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN
+    });
+
+    // 4. Send response
+    res.status(200).json({
+      status: 'success',
+      token,
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email
+        }
+      }
+    });
+
+  } catch (error) {
+    // 5. Proper error handling
+    res.status(500).json({
+      status: 'error',
+      error: 'Internal server error'
+    });
   }
 };
 

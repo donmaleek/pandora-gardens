@@ -10,24 +10,17 @@ const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
+const slowDown = require('express-slow-down'); // Moved to top with other imports
 
 const router = express.Router();
-
-
 
 // ======================
 // SECURITY MIDDLEWARE
 // ======================
-
-/**
- * Security middleware stack for authentication endpoints
- * @middleware
- * @description Applies essential security protections to all auth routes
- */
 router.use(
   helmet.contentSecurityPolicy({
     directives: {
-      defaultSrc: ["'self'"],
+      defaultSrc: ["'self'"], // Keep original value
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:"]
@@ -37,13 +30,8 @@ router.use(
 );
 
 // ======================
-// RATE LIMITERS (Keep only one declaration)
+// RATE LIMITERS
 // ======================
-
-/**
- * Authentication attempt rate limiter
- * @constant {RateLimit}
- */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -52,10 +40,6 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-/**
- * Registration rate limiter
- * @constant {RateLimit}
- */
 const registrationLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 3,
@@ -67,11 +51,6 @@ const registrationLimiter = rateLimit({
 // ======================
 // VALIDATION MIDDLEWARE
 // ======================
-
-/**
- * Registration validation chain
- * @constant {Array}
- */
 const validateRegistration = [
   body('name')
     .trim()
@@ -88,9 +67,24 @@ const validateRegistration = [
     .withMessage('Password must contain uppercase, lowercase, number, and special character')
 ];
 
+const validateLogin = [
+  body('email')
+    .isEmail()
+    .withMessage('Invalid email format')
+    .normalizeEmail(),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+];
+
 // ======================
 // ROUTE CONFIGURATION
 // ======================
+const loginSpeedLimit = slowDown({
+  windowMs: 15 * 60 * 1000,
+  delayAfter: 3,
+  delayMs: 1500
+});
 
 router.post(
   '/register',
@@ -102,6 +96,8 @@ router.post(
 router.post(
   '/login',
   authLimiter,
+  loginSpeedLimit,
+  validateLogin,
   authController.login
 );
 
@@ -114,7 +110,6 @@ router.post(
 // ======================
 // SECURITY HEADERS
 // ======================
-
 router.use((req, res, next) => {
   res.set({
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -122,6 +117,17 @@ router.use((req, res, next) => {
     'Referrer-Policy': 'strict-origin-when-cross-origin'
   });
   next();
+});
+
+// ======================
+// ERROR HANDLING
+// ======================
+router.use((err, req, res, next) => {
+  console.error('Auth Route Error:', err);
+  res.status(500).json({
+    status: 'error',
+    error: 'Internal authentication error'
+  });
 });
 
 // Debugging check
