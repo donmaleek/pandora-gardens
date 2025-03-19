@@ -10,11 +10,7 @@ import house3 from '../assets/pandora-4.png';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    remember: false
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [statusMessage, setStatusMessage] = useState({ text: '', type: '' });
   const [showResetForm, setShowResetForm] = useState(false);
@@ -33,25 +29,26 @@ const LoginPage = () => {
       setStatusMessage({ text: 'Please fill in all fields', type: 'error' });
       return;
     }
-    
+
     try {
       const response = await fetch('http://localhost:5000/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
+        body: JSON.stringify(formData),
       });
-      
+
       const data = await response.json();
       if (!response.ok) {
-        setStatusMessage({ text: data.message || 'Login failed', type: 'error' });
+        setStatusMessage({ text: data?.message || 'Login failed', type: 'error' });
         return;
       }
-      
+
+      // Store token in both localStorage and sessionStorage
+      localStorage.setItem('authToken', data.token);
+      sessionStorage.setItem('authToken', data.token);
+
       setStatusMessage({ text: '✅ Login successful! Redirecting...', type: 'success' });
-      setTimeout(() => navigate('/dashboard'), 1500);
+      setTimeout(() => navigate('/profile'), 1500);
     } catch (error) {
       setStatusMessage({ text: '⚠️ Server error. Please try again later.', type: 'error' });
     }
@@ -68,12 +65,12 @@ const LoginPage = () => {
       const response = await fetch('http://localhost:5000/api/v1/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail })
+        body: JSON.stringify({ email: resetEmail }),
       });
 
       const data = await response.json();
       if (!response.ok) {
-        setStatusMessage({ text: data.message || 'Password reset failed', type: 'error' });
+        setStatusMessage({ text: data?.message || 'Password reset failed', type: 'error' });
         return;
       }
 
@@ -92,15 +89,16 @@ const LoginPage = () => {
     slidesToScroll: 1,
     autoplay: true,
     autoplaySpeed: 3000,
-    arrows: false
+    arrows: false,
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="flex flex-wrap w-full max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden mx-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <div className="flex flex-wrap w-full max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden">
         
-        <div className="hidden md:block w-1/2 relative bg-black">
-          <Slider {...settings} className="h-full">
+        {/* Image Slider Section */}
+        <div className="hidden md:block w-1/2 bg-black">
+          <Slider {...settings}>
             {[house1, house2, house3].map((img, index) => (
               <div key={index} className="h-[600px] flex items-center justify-center relative">
                 <img 
@@ -114,6 +112,7 @@ const LoginPage = () => {
           </Slider>
         </div>
 
+        {/* Login Form Section */}
         <div className="w-full md:w-1/2 p-8 md:p-12 bg-gray-50">
           <div className="max-w-md mx-auto">
             <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center">
@@ -177,12 +176,10 @@ const LoginPage = () => {
               </form>
             ) : (
               <form onSubmit={handlePasswordReset} className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                  Reset Password
-                </h2>
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">Reset Password</h2>
                 <input
                   type="email"
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   placeholder="Enter your registered email"
@@ -192,10 +189,6 @@ const LoginPage = () => {
                 </button>
               </form>
             )}
-
-            <p className="mt-8 text-center text-sm text-gray-600">
-              Don't have an account? <Link to="/registration" className="text-blue-600 font-medium">Create account</Link>
-            </p>
           </div>
         </div>
       </div>

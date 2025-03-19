@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{{sanitize subject}}}</title>
+  <style type="text/css">
+    /* Reset styles */
+    body {
+      margin: 0;
+      padding: 0;
+      min-width: 100%;
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      background-color: #f6f6f6;
+      color: #333333;
+    }
+    {{#if (eq env 'development')}}
+    /* Development mode border */
+    body:before {
+      content: "TEST ENVIRONMENT";
+      display: block;
+      padding: 8px;
+      background: #dc3545;
+      color: white;
+      text-align: center;
+      font-size: 12px;
+    }
+    {{/if}}
+  </style>
+</head>
+<body style="-webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; margin: 0; padding: 0;">
+  <!--[if mso]>
+  <style type="text/css">
+    .body-table {
+      width: 600px !important;
+    }
+  </style>
+  <![endif]-->
+  
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="body-table">
+    <tr>
+      <td align="center" style="padding: 20px 0;">
+        <!-- Secure Content Container -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="background: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 30px 30px 20px; border-bottom: 2px solid #007bff;">
+              <a href="{{frontendUrl}}" target="_blank" rel="noopener noreferrer">
+                <img src="{{frontendUrl}}/logo-email.png" alt="Pandora Gardens Logo" width="180" style="border: 0; display: block; margin: 0 auto;" />
+              </a>
+            </td>
+          </tr>
+          
+          <!-- Dynamic Content -->
+          <tr>
+            <td style="padding: 30px;">
+              {{{body}}}
+            </td>
+          </tr>
+          
+          <!-- Security Footer -->
+          <tr>
+            <td style="padding: 20px 30px; background: #f8f9fa; border-top: 1px solid #eeeeee; font-size: 12px; color: #666666;">
+              <p style="margin: 0;">
+                This message was sent to {{email}}.<br/>
+                {{companyName}} &copy; {{currentYear}} | 
+                <a href="{{privacyPolicyUrl}}" style="color: #666666; text-decoration: none;">Privacy Policy</a> | 
+                <a href="{{termsUrl}}" style="color: #666666; text-decoration: none;">Terms</a><br/>
+                <span style="color: #999999;">{{{safe address}}}</span>
+              </p>
+              {{#if unsubscribeUrl}}
+              <p style="margin: 10px 0 0;">
+                <a href="{{encrypt unsubscribeUrl}}" style="color: #666666; text-decoration: none;">Unsubscribe</a> | 
+                <a href="{{encrypt emailPreferencesUrl}}" style="color: #666666; text-decoration: none;">Email Preferences</a>
+              </p>
+              {{/if}}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

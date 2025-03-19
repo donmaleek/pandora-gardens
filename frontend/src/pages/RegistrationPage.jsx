@@ -32,9 +32,19 @@ const RegistrationPage = () => {
     const newErrors = {};
     if (!formData.name.match(/^.{2,50}$/)) newErrors.name = 'Name must be 2-50 characters';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format';
-    if (!/^\+?\d{7,15}$/.test(formData.phone)) newErrors.phone = 'Invalid phone format';
+    
+    // 🔥 Changed phone validation to match backend
+    if (!/^(\+?\d{1,4}[-.\s]?)?(\d{7,15})$/.test(formData.phone)) {
+      newErrors.phone = 'Invalid phone number format';
+    }
+    
     if (formData.password.length < 8) newErrors.password = 'Password must be 8+ characters';
-    if (!['tenant', 'landlord', 'agent'].includes(formData.role)) newErrors.role = 'Please select a valid role';
+    
+    // 🔥 Updated role validation to match User model enum
+    if (!['tenant', 'landlord', 'agent', 'admin'].includes(formData.role)) {
+      newErrors.role = 'Please select a valid role';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };

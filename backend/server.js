@@ -27,7 +27,6 @@ const logger = winston.createLogger({
 // ====== Environment Validation ======
 if (!process.env.MONGODB_URI) {
   logger.error('❌ FATAL ERROR: MONGODB_URI is not defined');
-  // ====== ADDED HELPFUL MESSAGE ======
   logger.error('💡 Did you mean to use MONGO_URI? Rename it to MONGODB_URI in .env');
   logger.info('Current environment variables:', Object.keys(process.env));
   process.exit(1);
@@ -55,6 +54,7 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:5173',
+    'http://localhost:3000',
     'https://your-production-domain.com'
   ],
   credentials: true,
@@ -137,11 +137,15 @@ const connectDB = async (retries = 5) => {
 
 connectDB();
 
-// Authentication & User Routes
-app.post('/api/user/send-verification', authenticateMiddleware, async (req, res) => {
+// ====== Fixed Routes Section ======
+app.post('/api/v1/auth/send-verification', authenticateMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+    
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'Email already verified' });
+    }
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     const verificationLink = `http://localhost:5000/verify-email?token=${token}`;
@@ -154,30 +158,80 @@ app.post('/api/user/send-verification', authenticateMiddleware, async (req, res)
   }
 });
 
-app.post('/api/user/send-2fa', authenticateMiddleware, async (req, res) => {
+app.post('/api/v1/auth/verify-2fa', authenticateMiddleware, async (req, res) => {
   try {
-    const code = Math.floor(100000 + Math.random() * 900000);
-    req.user.otp = code;
-    await req.user.save();
-    await sendSMS(req.user.phone, `Your 2FA code: ${code}`);
-    res.json({ message: '2FA code sent' });
+    const { code } = req.body;
+    const user = await User.findById(req.user.id);
+    
+    if (!user.otp || user.otp !== parseInt(code)) {
+      return res.status(401).json({ message: 'Invalid 2FA code' });
+    }
+
+    user.otp = null;
+    await user.save();
+    
+    res.json({ message: '2FA verification successful' });
   } catch (error) {
-    logger.error('❌ Error sending 2FA code:', error.message);
+    logger.error('❌ 2FA Verification Error:', error.message);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Profile Page Route
-app.get('/api/user/profile', authenticateMiddleware, async (req, res) => {
+app.get('/api/v1/auth/me', authenticateMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findById(req.user.id)
+      .select('-password -__v -createdAt -updatedAt');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    
+    res.json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      location: user.location,
+      bio: user.bio,
+      isEmailVerified: user.isVerified
+    });
   } catch (error) {
     logger.error('❌ Error fetching user profile:', error.message);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+// Add this route before your error handling middleware
+app.get('/api/v1/auth/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+    
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Find user
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if already verified
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'Email already verified' });
+    }
+
+    // Update verification status
+    user.isVerified = true;
+    await user.save();
+
+    // Redirect to frontend with success status
+    res.redirect(`http://localhost:5173/email-verified?success=true`);
+  } catch (error) {
+    // Redirect to frontend with error
+    const errorMessage = error.name === 'TokenExpiredError' 
+      ? 'Verification link expired' 
+      : 'Invalid verification link';
+    res.redirect(`http://localhost:5173/email-verified?success=false&error=${encodeURIComponent(errorMessage)}`);
+  }
+});
+// ====== End of Fixed Routes ======
 
 // Routes
 app.use('/api/v1/mpesa', mpesaRoutes);

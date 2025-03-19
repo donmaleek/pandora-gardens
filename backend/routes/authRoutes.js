@@ -10,7 +10,7 @@ const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
-const slowDown = require('express-slow-down'); // Moved to top with other imports
+const slowDown = require('express-slow-down');
 
 const router = express.Router();
 
@@ -20,11 +20,16 @@ const router = express.Router();
 router.use(
   helmet.contentSecurityPolicy({
     directives: {
-      defaultSrc: ["'self'"], // Keep original value
+      defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:"]
     }
+  }),
+  helmet.hsts({ // 🔥 Added HSTS
+    maxAge: 63072000,
+    includeSubDomains: true,
+    preload: true
   }),
   mongoSanitize({ replaceWith: '_' })
 );
@@ -48,8 +53,23 @@ const registrationLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// 🔥 Added verification limiters
+const verificationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: 'Too many verification requests',
+  standardHeaders: true
+});
+
+const twoFaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many 2FA attempts',
+  standardHeaders: true
+});
+
 // ======================
-// VALIDATION MIDDLEWARE
+// VALIDATION MIDDLEWARE 
 // ======================
 const validateRegistration = [
   body('name')
@@ -77,6 +97,15 @@ const validateLogin = [
     .withMessage('Password is required')
 ];
 
+// 🔥 Added 2FA validation
+const validate2FA = [
+  body('code')
+    .isLength({ min: 6, max: 6 })
+    .withMessage('Invalid verification code')
+    .isNumeric()
+    .withMessage('Code must be numeric')
+];
+
 // ======================
 // ROUTE CONFIGURATION
 // ======================
@@ -86,6 +115,33 @@ const loginSpeedLimit = slowDown({
   delayMs: 1500
 });
 
+// 🔥 Added new routes
+router.post(
+  '/send-verification',
+  verificationLimiter,
+  authController.sendVerificationEmail
+);
+
+router.get(
+  '/verify-email',
+  verificationLimiter,
+  authController.verifyEmail
+);
+
+router.post(
+  '/send-2fa',
+  twoFaLimiter,
+  authController.send2FACode
+);
+
+router.post(
+  '/verify-2fa',
+  twoFaLimiter,
+  validate2FA,
+  authController.verify2FA
+);
+
+// Existing routes remain unchanged
 router.post(
   '/register',
   registrationLimiter,
@@ -114,7 +170,8 @@ router.use((req, res, next) => {
   res.set({
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'strict-origin-when-cross-origin'
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'interest-cohort=()' // 🔥 Added
   });
   next();
 });
@@ -124,17 +181,17 @@ router.use((req, res, next) => {
 // ======================
 router.use((err, req, res, next) => {
   console.error('Auth Route Error:', err);
-  res.status(500).json({
-    status: 'error',
-    error: 'Internal authentication error'
-  });
-});
+  
+  // 🔥 Added specific error handling
+  const statusCode = err.statusCode || 500;
+  const message = err.name === 'TokenExpiredError' 
+    ? 'Verification link expired' 
+    : err.message || 'Authentication error';
 
-// Debugging check
-console.log('Controller Methods:', {
-  register: typeof authController.register,
-  login: typeof authController.login,
-  forgotPassword: typeof authController.forgotPassword
+  res.status(statusCode).json({
+    status: 'error',
+    error: message
+  });
 });
 
 module.exports = router;

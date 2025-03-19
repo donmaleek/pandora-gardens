@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
   <style>
     body {
       font-family: Arial, sans-serif;
       background-color: #f4f4f4;
       color: #333;
       padding: 20px;
+      margin: 0;
     }
     .container {
       background-color: #fff;
@@ -17,59 +20,61 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
     h1 {
-      color: #007bff;
+      color: #0066CC;
+      font-size: 24px;
+      margin-bottom: 25px;
     }
     .button {
       display: inline-block;
       padding: 12px 20px;
-      margin-top: 20px;
-      background-color: #28a745;
-      color: #fff;
+      margin: 20px 0;
+      background-color: #228B22;
+      color: #FFFFFF;
       text-decoration: none;
       border-radius: 6px;
+      font-weight: bold;
+      mso-style-priority: 100 !important;
+      min-width: 200px;
+      text-align: center;
+    }
+    ul {
+      padding-left: 20px;
+      line-height: 1.6;
+    }
+    @media screen and (max-width: 600px) {
+      .container {
+        padding: 15px;
+      }
+      h1 {
+        font-size: 20px;
+      }
     }
   </style>
 </head>
 <body>
-
   <div class="container">
-    <h1>Welcome to Pandora Gardens, {{name}}! 🌿</h1>
+    <h1>Welcome to Pandora Gardens, {{name}}! <span role="img" aria-label="Growing Plant">🌿</span></h1>
     
-    <p>
-      We're thrilled to have you join <strong>Pandora Gardens</strong>—the future of real estate. 
-      Whether you're searching for your dream home, managing your rental, or showcasing your latest property listing, 
-      Pandora Gardens is here to make every step smooth, smart, and secure.
-    </p>
+    <p>We're thrilled to have you join <strong>Pandora Gardens</strong> - Kenya's premier real estate platform.</p>
 
-    <p>
-      As part of our community, you'll enjoy:
-    </p>
+    <p>Please verify your email to unlock full access:</p>
+    
+    <a href="{{verificationLink}}" class="button">Verify Email Address</a>
 
+    <p>After verification, you can:</p>
+    
     <ul>
-      <li>🔍 Advanced property searches tailored to your needs.</li>
-      <li>🏠 Virtual tours and rich neighborhood insights.</li>
-      <li>💬 Real-time chat with agents and property owners.</li>
-      <li>📱 Mpesa-powered rent payments with instant notifications.</li>
-      <li>📊 Personal dashboards to manage all your rentals and listings.</li>
-      <li>🎁 Rewards through our referral program and exclusive features.</li>
+      <li>🔍 Search properties with smart filters</li>
+      <li>🏠 Save favorite listings</li>
+      <li>📱 Receive instant rent payment notifications</li>
+      <li>💬 Chat directly with property agents</li>
     </ul>
 
-    <p>
-      We’re on a mission to revolutionize how you find, manage, and enjoy property living—bringing everything you need 
-      into one powerful, easy-to-use platform.
-    </p>
-
-    <p>
-      Ready to get started? Explore, connect, and experience real estate like never before.
-    </p>
-
-    <a href="https://pandoragardens.example.com/login" class="button">Login to Your Account</a>
-
-    <p style="margin-top: 30px;">
-      Welcome aboard, <br/>
-      The Pandora Gardens Team 🌟
-    </p>
+    <div style="margin-top: 30px; font-size: 12px; color: #666;">
+      <p>Sent to {{email}} · <a href="{{unsubscribeLink}}">Unsubscribe</a></p>
+      <p>Pandora Gardens Ltd · ABC Place, Nairobi</p>
+      <p><a href="{{privacyPolicy}}">Privacy Policy</a> | <a href="{{terms}}">Terms of Service</a></p>
+    </div>
   </div>
-
 </body>
 </html>

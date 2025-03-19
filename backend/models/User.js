@@ -52,6 +52,24 @@ const userSchema = new mongoose.Schema(
       required: [true, '❌ Role is required'],
       enum: ['tenant', 'landlord', 'agent', 'admin'],
     },
+    // 🔒 Added authentication-related fields
+    isVerified: {
+      type: Boolean,
+      default: false
+    },
+    otp: {
+      type: Number,
+      select: false
+    },
+    // 📍 Added profile fields
+    location: {
+      type: String,
+      maxlength: [100, '❌ Location cannot exceed 100 characters']
+    },
+    bio: {
+      type: String,
+      maxlength: [500, '❌ Bio cannot exceed 500 characters']
+    }
   },
   {
     timestamps: true,
@@ -60,6 +78,7 @@ const userSchema = new mongoose.Schema(
       transform: (doc, ret) => {
         delete ret.password;
         delete ret.__v;
+        delete ret.otp;
         return ret;
       },
     },
