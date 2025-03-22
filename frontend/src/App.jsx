@@ -8,6 +8,8 @@ import Login from "./pages/Login";
 import LandingPage from "./pages/LandingPage"; // ✅ Import LandingPage
 import Profile from './pages/Profile';
 import PrivateRoute from './routes/PrivateRoute';
+import EmailVerified from "./pages/EmailVerified";
+
 
 function App() {
   return (

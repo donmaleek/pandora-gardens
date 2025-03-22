@@ -15,6 +15,8 @@ const LoginPage = () => {
   const [statusMessage, setStatusMessage] = useState({ text: '', type: '' });
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [responseTime, setResponseTime] = useState(null);
 
   useEffect(() => {
     if (statusMessage.text) {
@@ -30,6 +32,9 @@ const LoginPage = () => {
       return;
     }
 
+    setLoading(true);
+    const startTime = performance.now();
+
     try {
       const response = await fetch('http://localhost:5000/api/v1/auth/login', {
         method: 'POST',
@@ -38,19 +43,23 @@ const LoginPage = () => {
       });
 
       const data = await response.json();
+      const endTime = performance.now();
+      setResponseTime((endTime - startTime).toFixed(2));
+
       if (!response.ok) {
-        setStatusMessage({ text: data?.message || 'Login failed', type: 'error' });
-        return;
+        throw new Error(data.message || 'Login failed');
       }
 
-      // Store token in both localStorage and sessionStorage
       localStorage.setItem('authToken', data.token);
       sessionStorage.setItem('authToken', data.token);
 
       setStatusMessage({ text: '✅ Login successful! Redirecting...', type: 'success' });
       setTimeout(() => navigate('/profile'), 1500);
     } catch (error) {
-      setStatusMessage({ text: '⚠️ Server error. Please try again later.', type: 'error' });
+      console.error('Login error:', error);
+      setStatusMessage({ text: error.message || '⚠️ Something went wrong. Please try again.', type: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -61,6 +70,9 @@ const LoginPage = () => {
       return;
     }
 
+    setLoading(true);
+    const startTime = performance.now();
+
     try {
       const response = await fetch('http://localhost:5000/api/v1/auth/reset-password', {
         method: 'POST',
@@ -69,15 +81,20 @@ const LoginPage = () => {
       });
 
       const data = await response.json();
+      const endTime = performance.now();
+      setResponseTime((endTime - startTime).toFixed(2));
+
       if (!response.ok) {
-        setStatusMessage({ text: data?.message || 'Password reset failed', type: 'error' });
-        return;
+        throw new Error(data.message || 'Password reset failed');
       }
 
       setStatusMessage({ text: '📩 Password reset link sent to your email', type: 'success' });
       setShowResetForm(false);
     } catch (error) {
-      setStatusMessage({ text: '⚠️ Error sending reset link', type: 'error' });
+      console.error('Password reset error:', error);
+      setStatusMessage({ text: error.message || '⚠️ Error sending reset link', type: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -112,82 +129,138 @@ const LoginPage = () => {
           </Slider>
         </div>
 
-        {/* Login Form Section */}
+        {/* Form Section */}
         <div className="w-full md:w-1/2 p-8 md:p-12 bg-gray-50">
           <div className="max-w-md mx-auto">
-            <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center">
-              Welcome Back
-              <span className="block mt-2 text-sm font-normal text-gray-500">
-                Sign in to your account
-              </span>
-            </h1>
-
-            {statusMessage.text && (
-              <div className={`p-3 text-center rounded-lg mb-6 text-sm ${
-                statusMessage.type === 'error' 
-                  ? 'bg-red-100 text-red-700' 
-                  : 'bg-green-100 text-green-700'
-              }`}>
-                {statusMessage.text}
-              </div>
-            )}
-
             {!showResetForm ? (
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
+              <>
+                <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center">
+                  Welcome Back
+                  <span className="block mt-2 text-sm font-normal text-gray-500">
+                    Sign in to your account
+                  </span>
+                </h1>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
+                {statusMessage.text && (
+                  <div className={`p-3 text-center rounded-lg mb-6 text-sm ${
+                    statusMessage.type === 'error' 
+                      ? 'bg-red-100 text-red-700' 
+                      : 'bg-green-100 text-green-700'
+                  }`}>
+                    {statusMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email
+                    </label>
                     <input
-                      type={showPassword ? "text" : "password"}
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-12"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      type="email"
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-12"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className="absolute top-1/2 right-4 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <FaEyeSlash /> : <FaEye />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors shadow-sm"
+                    disabled={loading}
+                  >
+                    {loading ? 'Signing In...' : 'Sign In'}
+                  </button>
+
+                  <div className="text-center mt-4">
                     <button
                       type="button"
-                      className="absolute top-1/2 right-4 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      onClick={() => setShowPassword(!showPassword)}
+                      onClick={() => setShowResetForm(true)}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
                     >
-                      {showPassword ? <FaEyeSlash /> : <FaEye />}
+                      Forgot Password?
                     </button>
                   </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors shadow-sm"
-                >
-                  Sign In
-                </button>
-              </form>
+                </form>
+              </>
             ) : (
-              <form onSubmit={handlePasswordReset} className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Reset Password</h2>
-                <input
-                  type="email"
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="Enter your registered email"
-                />
-                <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg">
+              <>
+                <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center">
                   Reset Password
-                </button>
-              </form>
+                  <span className="block mt-2 text-sm font-normal text-gray-500">
+                    Enter your email to receive a reset link
+                  </span>
+                </h1>
+
+                {statusMessage.text && (
+                  <div className={`p-3 text-center rounded-lg mb-6 text-sm ${
+                    statusMessage.type === 'error' 
+                      ? 'bg-red-100 text-red-700' 
+                      : 'bg-green-100 text-green-700'
+                  }`}>
+                    {statusMessage.text}
+                  </div>
+                )}
+
+                <form onSubmit={handlePasswordReset} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors shadow-sm"
+                    disabled={loading}
+                  >
+                    {loading ? 'Sending Reset Link...' : 'Send Reset Link'}
+                  </button>
+
+                  <div className="text-center mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowResetForm(false)}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Back to Login
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {responseTime && (
+              <div className="text-sm text-gray-500 text-center mt-4">
+                Response time: {responseTime} ms
+              </div>
             )}
           </div>
         </div>
