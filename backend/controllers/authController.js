@@ -144,72 +144,34 @@ exports.register = async (req, res, next) => {
  * @error {403} Unverified email
  */
 exports.login = async (req, res, next) => {
-  let user;
   try {
     const { email, password } = req.body;
-    
-    // Validate input presence
-    if (!email || !password) {
-      logger.warn('Missing credentials', {
-        endpoint: '/login',
-        ip: req.ip,
-        emailPresent: !!email,
-        passwordPresent: !!password
-      });
-      return next(new AppError('Please provide email and password', 400));
-    }
+    console.log('Login attempt for:', email); // Debug
 
-    // Database connection check
-    if (mongoose.connection.readyState !== 1) {
-      logger.error('Database connection not ready', {
-        state: mongoose.connection.readyState,
-        dbName: mongoose.connection.name
-      });
-      return next(new AppError('Database connection error', 503));
-    }
+    let user = await User.findOne({ email: email.toLowerCase() })
+      .select('+password +isVerified')
+      .lean();
 
-    // Find user with security fields
-    user = await User.findOne({ email })
-      .select('+password +loginAttempts +lockUntil +isVerified')
-      .catch(err => {
-        logger.error('Database query failed', {
-          error: err.stack,
-          query: { email }
-        });
-        throw new Error('Database operation failed');
-      });
-
-    // Account lock check
-    if (user?.lockUntil && user.lockUntil > Date.now()) {
-      const remaining = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      logger.warn('Account locked', {
-        userId: user._id,
-        attempts: user.loginAttempts,
-        lockedUntil: user.lockUntil
-      });
-      return next(new AppError(`Account locked. Try again in ${remaining} minutes`, 403));
-    }
-
-    // Credential validation
-    if (!user || !(await user.matchPassword(password))) {
-      await user?.incrementLoginAttempts();
-      logger.warn('Invalid credentials', {
-        email,
-        userId: user?._id,
-        attemptCount: user?.loginAttempts || 0
-      });
+    if (!user) {
+      console.log('❌ No user found');
       return next(new AppError('Invalid credentials', 401));
     }
 
-    // Email verification check
-    if (!user.isVerified) {
-      logger.warn('Unverified login attempt', { userId: user._id });
-      return next(new AppError('Please verify your email first', 403));
+    console.log('🔍 User found:', user._id);
+    console.log('🔐 Stored hash:', user.password);
+    
+    const isMatch = await bcrypt.compare(password, user.password);
+    console.log('✅ Password match:', isMatch);
+
+    if (!isMatch) {
+      console.log('🔒 Password mismatch');
+      return next(new AppError('Invalid credentials', 401));
     }
 
-    // Reset login attempts on success
-    await user.resetLoginAttempts();
-    logger.info('Successful login', { userId: user._id });
+    if (!user.isVerified) {
+      console.log('📧 Unverified account');
+      return next(new AppError('Please verify email first', 403));
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -238,14 +200,6 @@ exports.login = async (req, res, next) => {
       error: error.stack,
       userExists: !!user,
       userId: user?._id,
-      database: {
-        connected: mongoose.connection.readyState === 1,
-        dbName: mongoose.connection.name
-      },
-      environment: {
-        jwtConfigured: !!process.env.JWT_SECRET,
-        bcryptRounds: process.env.BCRYPT_SALT_ROUNDS || 12
-      },
       request: {
         ip: req.ip,
         body: {
@@ -362,16 +316,20 @@ exports.sendVerificationEmail = async (req, res, next) => {
     const verificationToken = signToken(user._id);
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
 
-    await sendEmail({
-      to: user.email,
-      subject: 'Verify Your Email Address',
-      templateName: 'emailVerification',
-      templateData: {
-        name: user.name,
-        verificationUrl,
-        email: user.email
-      }
-    });
+   await sendEmail({
+  to: newUser.email,
+  subject: 'Confirm Your Pandora Gardens Account',
+  templateName: 'verification',
+  templateData: {
+    name: newUser.name,
+    verificationUrl: `${process.env.FRONTEND_URL}/verify-email?token=${verifyToken}`,
+    year: new Date().getFullYear(),
+    legalAddress: process.env.LEGAL_ADDRESS,
+    supportEmail: process.env.SUPPORT_EMAIL,
+    unsubscribeUrl: process.env.UNSUBSCRIBE_URL,
+    privacyUrl: process.env.PRIVACY_POLICY_URL
+  }
+});
 
     res.status(200).json({
       status: 'success',

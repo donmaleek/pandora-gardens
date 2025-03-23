@@ -1,20 +1,28 @@
+/*
+ * Email Service Module (Gmail Optimized)
+ * 
+ * This module handles email sending functionality using Nodemailer with Handlebars templating.
+ * Configured for Gmail with secure authentication.
+ */
+
+/* Load environment variables and required modules */
+const crypto = require('crypto');
+const stripHtml = require('strip-html');
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 const AppError = require('./appError');
 const NodemailerExpressHandlebars = require('nodemailer-express-handlebars');
 const path = require('path');
-const Handlebars = require('handlebars'); // Added to register helpers
+const Handlebars = require('handlebars');
 
-// ✅ Register the 'eq' helper
+// Register custom helper (keep your existing helper)
 Handlebars.registerHelper('eq', (a, b) => a === b);
 
-// Validate required environment variables
+// Environment variables validation (add Gmail-specific check)
 const requiredEnvVars = [
-  'EMAIL_HOST',
-  'EMAIL_PORT',
-  'EMAIL_USER',
-  'EMAIL_PASS',
-  'EMAIL_FROM'
+  'EMAIL_USER',    // Should be your full Gmail address
+  'EMAIL_PASS',    // App password from Google
+  'EMAIL_FROM'     // Should match EMAIL_USER
 ];
 
 requiredEnvVars.forEach((varName) => {
@@ -23,17 +31,22 @@ requiredEnvVars.forEach((varName) => {
   }
 });
 
-// Configure Nodemailer transporter
+// Updated transporter configuration for Gmail
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT),
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+    pass: process.env.EMAIL_PASS // Should be 16 chars without spaces
+  },
+  secure: false, // Required for port 587
+  tls: {
+    ciphers: 'SSLv3', // Force modern encryption
+    rejectUnauthorized: false // TEMPORARY for testing
+  },
+  logger: true // Add this for debug logs
 });
 
-// Attach Handlebars templating to the transporter
+// Keep your existing template configuration
 const handlebarOptions = {
   viewEngine: {
     extname: '.hbs',
@@ -47,7 +60,7 @@ const handlebarOptions = {
 
 transporter.use('compile', NodemailerExpressHandlebars(handlebarOptions));
 
-// Send email with template or plain text
+// Email sending function remains unchanged
 const sendEmail = async (options) => {
   try {
     const mailOptions = {
@@ -57,7 +70,7 @@ const sendEmail = async (options) => {
     };
 
     if (options.templateName && options.templateData) {
-      mailOptions.template = options.templateName; // Example: 'welcomeEmail'
+      mailOptions.template = options.templateName;
       mailOptions.context = options.templateData;
     } else if (options.text) {
       mailOptions.text = options.text;
