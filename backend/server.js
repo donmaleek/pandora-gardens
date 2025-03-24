@@ -22,7 +22,8 @@ const morgan = require('morgan');
 const fs = require('fs');
 const https = require('https');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt'); // 🔑 Added bcrypt for password hashing
+const bcrypt = require('bcrypt'); 
+// 🔑 Added bcrypt for password hashing
 
 // ====== INITIALIZE LOGGER ======
 /**
@@ -196,155 +197,130 @@ app.post('/api/v1/auth/register', async (req, res) => {
  * @desc Authenticate user and return JWT token with extended details
  * @access Public
  */
+
+// Environment validation
+if (!process.env.JWT_SECRET) {
+  logger.error('FATAL ERROR: JWT_SECRET is not defined');
+  process.exit(1);
+}
+
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
+
 app.post('/api/v1/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    // Detailed input validation
-    if (!email || !password) {
-      logger.warn('Login attempt with missing credentials', {
-        endpoint: '/login',
-        ip: req.ip,
-        emailPresent: !!email,
-        passwordPresent: !!password
-      });
-      return res.status(400).json({
+    
+    // Validate input
+    if (!email?.trim() || !password?.trim()) {
+      return res.status(400).json({ 
         status: 'error',
         code: 'MISSING_CREDENTIALS',
-        message: 'Both email and password are required'
+        message: 'Both fields are required'
       });
     }
 
-    // Database health check
+    // Check database connection
     if (mongoose.connection.readyState !== 1) {
-      logger.error('Database connection not ready during login', {
-        state: mongoose.connection.readyState,
-        dbName: mongoose.connection.name
-      });
       return res.status(503).json({
         status: 'error',
         code: 'DATABASE_UNAVAILABLE',
-        message: 'Service temporarily unavailable'
+        message: 'Service unavailable'
       });
     }
 
-    // Find user with security fields
-    const user = await User.findOne({ email })
-      .select('+password +isVerified +loginAttempts +lockUntil +phone')
-      .maxTimeMS(5000);
+    // Normalize email
+    const cleanEmail = email.toLowerCase().trim().replace(/\s+/g, '');
+
+    // Find user with locking check
+    const user = await User.findOne({ email: cleanEmail })
+      .select('+password +isVerified +loginAttempts +lockUntil')
+      .maxTimeMS(10000);
 
     // Account lock check
-    if (user?.lockUntil && user.lockUntil > Date.now()) {
-      const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      logger.warn('Account locked login attempt', {
-        email,
-        userId: user._id,
-        attempts: user.loginAttempts
-      });
+    if (user?.lockUntil > Date.now()) {
       return res.status(403).json({
         status: 'error',
         code: 'ACCOUNT_LOCKED',
-        message: `Account temporarily locked. Try again in ${remainingTime} minutes`,
-        retryAfter: remainingTime * 60
+        message: `Account locked. Try again in ${Math.ceil((user.lockUntil - Date.now())/60000)} minutes`
       });
     }
 
-    // Credential validation
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      await user?.incrementLoginAttempts();
-      logger.warn('Invalid login attempt', {
-        email,
-        ip: req.ip,
-        attemptCount: user?.loginAttempts || 1
+    // User existence check
+    if (!user) {
+      return res.status(401).json({
+        status: 'error',
+        code: 'USER_DOESNT EXIST',
+        message: 'USER DOESNT EXIST'
       });
+    }
+
+    // Validate password format
+    if (!user.password.startsWith('$2a$') && !user.password.startsWith('$2b$')) {
+      logger.error('Invalid password hash format', user._id);
+      return res.status(500).json({
+        status: 'error',
+        code: 'SERVER_ERROR',
+        message: 'System error'
+      });
+    }
+
+    // Password validation
+    const isMatch = await bcrypt.compare(password.trim(), user.password);
+    if (!isMatch) {
+      await user.incrementLoginAttempts();
       return res.status(401).json({
         status: 'error',
         code: 'INVALID_CREDENTIALS',
-        message: 'Invalid email or password'
+        message: 'Invalid credentials'
       });
     }
 
     // Email verification check
     if (!user.isVerified) {
-      logger.warn('Unverified login attempt', { 
-        userId: user._id,
-        email: user.email
-      });
       return res.status(403).json({
         status: 'error',
-        code: 'UNVERIFIED_ACCOUNT',
-        message: 'Please verify your email address first',
-        verificationSent: user.verificationSentCount || 0
+        code: 'UNVERIFIED_EMAIL',
+        message: 'Verify your email first'
       });
     }
 
-    // Generate JWT token with enhanced details
+    // Generate token
     const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-        email: user.email,
-        phone: user.phone
-      },
+      { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
-    // Reset login attempts on success
+    // Reset attempts
     await user.resetLoginAttempts();
 
-    logger.info('Successful login', {
-      userId: user._id,
-      role: user.role,
-      ip: req.ip
-    });
-
-    res.json({
+    return res.json({
       status: 'success',
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role
-        },
+        user: user.toObject({ virtuals: true }),
         token: {
           value: token,
-          expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+          expiresIn: JWT_EXPIRES_IN,
           type: 'Bearer'
         }
       }
     });
 
   } catch (error) {
-    logger.error('LOGIN PROCESS FAILURE', {
-      error: error.stack,
-      system: {
-        dbConnected: mongoose.connection.readyState === 1,
-        jwtSecretSet: !!process.env.JWT_SECRET,
-        bcryptAvailable: typeof bcrypt.compare === 'function'
-      },
-      request: {
-        body: { email: req.body.email },
-        headers: req.headers
-      }
+    logger.error('Login Error:', {
+      error: error.message,
+      email: req.body.email,
+      dbState: mongoose.connection.readyState
     });
-
-    res.status(500).json({
+    
+    return res.status(500).json({
       status: 'error',
       code: 'SERVER_ERROR',
-      message: 'Authentication system error',
-      ...(process.env.NODE_ENV === 'development' && {
-        debug: {
-          error: error.message,
-          stack: error.stack
-        }
-      })
+      message: 'Authentication failed'
     });
   }
 });
-
+    
 // ====== EMAIL VERIFICATION ROUTE ======
 /**
  * @route GET /api/v1/auth/verify-email
@@ -454,6 +430,22 @@ app.post('/api/v1/auth/send-verification', authenticateMiddleware, async (req, r
   } catch (error) {
     logger.error('❌ Error sending verification email:', error.message);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.post('/api/v1/auth/unlock-account', async (req, res) => {
+  try {
+    const { email } = req.body;
+    await User.updateOne(
+      { email },
+      { 
+        $set: { "loginAttempts": 0, "lockUntil": null }
+      }
+    );
+    res.status(200).json({ message: 'Account unlocked' });
+  } catch (error) {
+    logger.error('UNLOCK ACCOUNT ERROR', { error: error.stack });
+    res.status(500).json({ message: 'Failed to unlock account' });
   }
 });
 

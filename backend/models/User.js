@@ -300,11 +300,11 @@ userSchema.methods.incrementLoginAttempts = async function () {
   
   const updates = {
     $inc: { loginAttempts: 1 },
-    $set: { lockUntil: Date.now() + 15*60*1000 } // 15 minute lock
+    $set: { lockUntil: Date.now() + 1*60*1000 } // 1 minute lock
   };
   
   if (this.loginAttempts + 1 >= 5) {
-    updates.$set.lockUntil = Date.now() + 24*60*60*1000; // 24 hour lock
+    updates.$set.lockUntil = Date.now() + 1*60*60*1000; // 1 hour lock
   }
   
   return this.updateOne(updates);

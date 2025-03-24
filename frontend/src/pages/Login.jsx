@@ -31,28 +31,31 @@ const LoginPage = () => {
       setStatusMessage({ text: 'Please fill in all fields', type: 'error' });
       return;
     }
-
+  
     setLoading(true);
     const startTime = performance.now();
-
+  
     try {
       const response = await fetch('http://localhost:5000/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-
+  
       const data = await response.json();
+      console.log('Response Status:', response.status);
+      console.log('Response Data:', data);
+  
       const endTime = performance.now();
       setResponseTime((endTime - startTime).toFixed(2));
-
+  
       if (!response.ok) {
         throw new Error(data.message || 'Login failed');
       }
-
+  
       localStorage.setItem('authToken', data.token);
       sessionStorage.setItem('authToken', data.token);
-
+  
       setStatusMessage({ text: '✅ Login successful! Redirecting...', type: 'success' });
       setTimeout(() => navigate('/profile'), 1500);
     } catch (error) {
@@ -62,6 +65,7 @@ const LoginPage = () => {
       setLoading(false);
     }
   };
+  
 
   const handlePasswordReset = async (e) => {
     e.preventDefault();
