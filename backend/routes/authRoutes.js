@@ -129,6 +129,7 @@ const validateLogin = [
     .normalizeEmail(),
   body('password')
     .notEmpty()
+    .trim()
     .withMessage('Password is required')
 ];
 
@@ -351,7 +352,7 @@ router.patch(
       }
 
       // Hash new password
-      const hashedPassword = await bcrypt.hash(password, 12);
+      const hashedPassword = await bcrypt.hash(password, 10);
       user.password = hashedPassword;
       user.passwordResetToken = undefined;
       user.passwordResetExpires = undefined;
@@ -441,7 +442,7 @@ router.get('/health', (req, res) => {
   const vitalChecks = {
     database: dbStatus,
     jwtConfigured: !!process.env.JWT_SECRET,
-    bcryptRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12,
+    bcryptRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS) || 10,
     memoryUsage: process.memoryUsage(),
     uptime: process.uptime()
   };

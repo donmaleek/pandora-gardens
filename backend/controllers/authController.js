@@ -102,35 +102,32 @@ exports.register = async (req, res, next) => {
     const { name, email, password, phone, role } = req.body;
 
     // Input validation
-    if (![name, email, password, phone, role].every(Boolean)) {
+    if (!name || !email || !password || !phone || !role) {
       return next(new AppError('All fields are required', 400));
     }
 
-    // Check if the user already exists
+    // Check for existing user
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return next(new AppError('Email is already registered', 400));
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Create a new user
+    // Create user with raw password (hashing handled in middleware)
     const newUser = await User.create({
       name,
       email,
-      password: hashedPassword,
+      password, // Pass raw password
       phone,
       role,
       isVerified: false,
     });
 
-    // Generate a JWT token
+    // Generate verification token
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN,
     });
 
-    // Send the response
+    // Send response
     res.status(201).json({
       status: 'success',
       token,
@@ -144,6 +141,7 @@ exports.register = async (req, res, next) => {
         },
       },
     });
+
   } catch (error) {
     logger.error(`Registration Error: ${error.stack}`);
     next(new AppError('User registration failed', 500));
@@ -162,156 +160,73 @@ exports.register = async (req, res, next) => {
  * @error {403} Unverified email
  */
 exports.login = async (req, res, next) => {
-  let user; // Declare user in outer scope for error handling
-  
+  let user;
   try {
-    console.log('\n=== NEW LOGIN ATTEMPT ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request body:', { 
-      email: req.body.email,
-      password: req.body.password ? `[length: ${req.body.password.length}]` : 'missing'
-    });
-
-    // Environment check
-    console.log('Environment checks:', {
-      JWT_SECRET: !!process.env.JWT_SECRET,
-      NODE_ENV: process.env.NODE_ENV,
-      DB_READY_STATE: mongoose.connection.readyState
-    });
-
     const { email, password } = req.body;
+
+    // Basic validation
     if (!email || !password) {
-      console.log('🚫 Missing credentials:', { emailExists: !!email, passwordExists: !!password });
-      return next(new AppError('Invalid credentials', 401));
+      return next(new AppError('Please provide email and password', 400));
     }
 
-    // Database query with error handling
-    try {
-      user = await User.findOne({ email: email.toLowerCase() })
-        .select('+password +isVerified +loginAttempts +lockUntil');
-        
-      console.log('🔍 User query result:', user ? `Found user ${user._id}` : 'No user found');
-    } catch (dbError) {
-      console.error('🚨 Database query failed:', dbError.message);
-      throw dbError;
-    }
+    // Get user with password
+    user = await User.findOne({ email: email.toLowerCase().trim() })
+      .select('+password +isVerified +loginAttempts +lockUntil');
 
+    // User existence check
     if (!user) {
-      console.log('❌ No user found for email:', email);
-      return next(new AppError('Invalid credentials', 401));
+      return next(new AppError('Invalid email or password', 401));
     }
 
     // Account lock check
     if (user.lockUntil && user.lockUntil > Date.now()) {
       const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      console.log('🔒 Account locked:', {
-        userId: user._id,
-        attempts: user.loginAttempts,
-        lockUntil: new Date(user.lockUntil).toISOString(),
-        remaining: `${remainingTime} minutes`
-      });
       return res.status(403).json({
         status: 'error',
         code: 'ACCOUNT_LOCKED',
-        message: `Account temporarily locked. Try again in ${remainingTime} minutes`,
+        message: `Account locked for ${remainingTime} minutes`,
         retryAfter: remainingTime * 60
       });
     }
 
     // Password verification
-    console.log('🔐 Password check:', {
-      inputPassword: `[length: ${password.length}]`,
-      storedHash: user.password ? `[length: ${user.password.length}]` : 'missing'
-    });
-
-    let isMatch = false;
-    try {
-      isMatch = await bcrypt.compare(password, user.password);
-      console.log('✅ Password comparison result:', isMatch);
-    } catch (bcryptError) {
-      console.error('🚨 Bcrypt comparison failed:', bcryptError.message);
-      throw bcryptError;
-    }
-
+    const isMatch = await user.matchPassword(password); 
     if (!isMatch) {
-      console.log('🔒 Password mismatch - incrementing attempts');
-      try {
-        await user.incrementLoginAttempts();
-        console.log('📈 Login attempts increased to:', user.loginAttempts + 1);
-      } catch (lockError) {
-        console.error('🚨 Failed to increment attempts:', lockError.message);
-      }
-      return next(new AppError('Invalid credentials', 401));
+      await user.incrementLoginAttempts();
+      return next(new AppError('Invalid email or password', 401));
     }
 
-    // Verification check
+    // Email verification check
     if (!user.isVerified) {
-      console.log('📧 Unverified account:', {
-        userId: user._id,
-        verificationStatus: user.isVerified
-      });
-      return next(new AppError('Please verify email first', 403));
+      return next(new AppError('Please verify your email first', 403));
     }
 
-    // JWT generation
-    console.log('🔑 Generating JWT with:', {
-      userId: user._id,
-      secretExists: !!process.env.JWT_SECRET,
-      expiresIn: process.env.JWT_EXPIRES_IN
-    });
-
+    // Generate JWT
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
-    // Reset attempts
-    try {
-      await user.resetLoginAttempts();
-      console.log('🔄 Reset login attempts for:', user._id);
-    } catch (resetError) {
-      console.error('🚨 Failed to reset attempts:', resetError.message);
-    }
-
-    console.log('🎉 Successful login:', {
-      userId: user._id,
-      tokenPreview: token.slice(0, 20) + '...'
-    });
+    // Reset login attempts
+    await user.resetLoginAttempts();
 
     res.status(200).json({
       status: 'success',
       token,
-      data: { user: { id: user._id, name: user.name, email: user.email, role: user.role } }
+      data: { 
+        user: { 
+          id: user._id, 
+          name: user.name, 
+          email: user.email, 
+          role: user.role 
+        }
+      }
     });
 
   } catch (error) {
-    console.error('🚨 CRITICAL ERROR:', {
-      message: error.message,
-      stack: error.stack,
-      systemState: {
-        userExists: !!user,
-        userId: user?._id,
-        dbConnected: mongoose.connection.readyState === 1,
-        memoryUsage: process.memoryUsage()
-      }
-    });
-
-    logger.error('LOGIN PROCESS FAILURE', {
-      error: error.stack,
-      userState: user ? {
-        _id: user._id,
-        attempts: user.loginAttempts,
-        locked: !!(user.lockUntil && user.lockUntil > Date.now())
-      } : 'no-user-found',
-      requestDetails: {
-        ip: req.ip,
-        headers: req.headers,
-        body: { email: req.body.email }
-      }
-    });
-
-    next(new AppError('Authentication system error', 500));
+    logger.error(`Login Error: ${error.stack}`);
+    next(new AppError('Authentication failed', 500));
   }
 };
 
@@ -345,7 +260,7 @@ exports.resetPassword = async (req, res, next) => {
     }
 
     // Password update flow
-    user.password = await bcrypt.hash(req.body.password, 12);
+    user.password = await bcrypt.hash(req.body.password, 10);
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
     

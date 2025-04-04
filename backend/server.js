@@ -111,34 +111,12 @@ app.post('/api/v1/auth/register', async (req, res) => {
   try {
     const { name, email, password, phone } = req.body; // Added phone
 
-    // Enhanced validation
-    if (!name || !email || !password || !phone) {
-      logger.error('Registration validation failed', { 
-        received: { name: !!name, email: !!email, password: !!password, phone: !!phone }
-      });
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-
-    // Database check with timeout
-    const existingUser = await User.findOne({ email }).maxTimeMS(5000);
-    if (existingUser) {
-      logger.warn('Duplicate registration attempt', { email });
-      return res.status(400).json({ message: 'Email already exists' });
-    }
-
-    // Password hashing with validation
-    const hashedPassword = await bcrypt.hash(password, 12)
-      .catch(err => {
-        logger.error('Bcrypt hashing failed', { error: err.stack });
-        throw new Error('Password processing failed');
-      });
-
     // User creation with phone
     const user = new User({ 
       name, 
       email, 
-      password: hashedPassword,
-      phone // Added phone field
+      password,
+      phone 
     });
 
     await user.save()
@@ -189,134 +167,6 @@ app.post('/api/v1/auth/register', async (req, res) => {
     res.status(500).json({ 
       message: 'Registration failed. Please try again.',
       systemError: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-/**
- * @route POST /api/v1/auth/login
- * @desc Authenticate user and return JWT token with extended details
- * @access Public
- */
-
-// Environment validation
-if (!process.env.JWT_SECRET) {
-  logger.error('FATAL ERROR: JWT_SECRET is not defined');
-  process.exit(1);
-}
-
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
-
-app.post('/api/v1/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    // Validate input
-    if (!email?.trim() || !password?.trim()) {
-      return res.status(400).json({ 
-        status: 'error',
-        code: 'MISSING_CREDENTIALS',
-        message: 'Both fields are required'
-      });
-    }
-
-    // Check database connection
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({
-        status: 'error',
-        code: 'DATABASE_UNAVAILABLE',
-        message: 'Service unavailable'
-      });
-    }
-
-    // Normalize email
-    const cleanEmail = email.toLowerCase().trim().replace(/\s+/g, '');
-
-    // Find user with locking check
-    const user = await User.findOne({ email: cleanEmail })
-      .select('+password +isVerified +loginAttempts +lockUntil')
-      .maxTimeMS(10000);
-
-    // Account lock check
-    if (user?.lockUntil > Date.now()) {
-      return res.status(403).json({
-        status: 'error',
-        code: 'ACCOUNT_LOCKED',
-        message: `Account locked. Try again in ${Math.ceil((user.lockUntil - Date.now())/60000)} minutes`
-      });
-    }
-
-    // User existence check
-    if (!user) {
-      return res.status(401).json({
-        status: 'error',
-        code: 'USER_DOESNT EXIST',
-        message: 'USER DOESNT EXIST'
-      });
-    }
-
-    // Validate password format
-    if (!user.password.startsWith('$2a$') && !user.password.startsWith('$2b$')) {
-      logger.error('Invalid password hash format', user._id);
-      return res.status(500).json({
-        status: 'error',
-        code: 'SERVER_ERROR',
-        message: 'System error'
-      });
-    }
-
-    // Password validation
-    const isMatch = await bcrypt.compare(password.trim(), user.password);
-    if (!isMatch) {
-      await user.incrementLoginAttempts();
-      return res.status(401).json({
-        status: 'error',
-        code: 'INVALID_CREDENTIALS',
-        message: 'Invalid credentials'
-      });
-    }
-
-    // Email verification check
-    if (!user.isVerified) {
-      return res.status(403).json({
-        status: 'error',
-        code: 'UNVERIFIED_EMAIL',
-        message: 'Verify your email first'
-      });
-    }
-
-    // Generate token
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
-
-    // Reset attempts
-    await user.resetLoginAttempts();
-
-    return res.json({
-      status: 'success',
-      data: {
-        user: user.toObject({ virtuals: true }),
-        token: {
-          value: token,
-          expiresIn: JWT_EXPIRES_IN,
-          type: 'Bearer'
-        }
-      }
-    });
-
-  } catch (error) {
-    logger.error('Login Error:', {
-      error: error.message,
-      email: req.body.email,
-      dbState: mongoose.connection.readyState
-    });
-    
-    return res.status(500).json({
-      status: 'error',
-      code: 'SERVER_ERROR',
-      message: 'Authentication failed'
     });
   }
 });
